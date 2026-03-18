@@ -38,7 +38,7 @@ export const refreshTokenAPI = async () => {
       withCredentials: true,
       headers: {
         'Content-Type': 'application/json',
-        'X-TENANT-SLUG': slug // 👈 THE MISSING PIECE! Tell PHP which database to use.
+        'X-TENANT-SLUG': slug //  THE MISSING PIECE! Tell PHP which database to use.
       }
     }
   );

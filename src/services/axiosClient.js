@@ -1,13 +1,6 @@
 import axios from 'axios';
 
-// ==========================================
-// DYNAMIC BASE URL SETUP
-// ==========================================
-// 1. Grab the current hostname (e.g., 'demo-hospital.localhost')
 const currentHostname = window.location.hostname;
-
-// 2. Construct the dynamic backend URL to match the frontend's origin exactly.
-// This guarantees that the browser will send the SameSite=Strict cookie.
 const dynamicBaseUrl = `http://${currentHostname}/team-backend/api`;
 
 const axiosClient = axios.create({
@@ -15,19 +8,13 @@ const axiosClient = axios.create({
 });
 
 // ==========================================
-// 1. REQUEST INTERCEPTOR 
+// 1. REQUEST INTERCEPTOR
 // ==========================================
 axiosClient.interceptors.request.use((config) => {
-  // Define routes that do NOT need tokens (Public Routes)
   const publicRoutes = ['/login', '/resolve'];
-  
-  // Check if the outgoing request URL contains any of the public routes
   const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
 
   if (isPublicRoute) {
-    // ==========================================
-    // PUBLIC ROUTES: Attach Slug ONLY
-    // ==========================================
     const hostname = window.location.hostname;
     const slug = hostname.split('.')[0];
     
@@ -35,14 +22,9 @@ axiosClient.interceptors.request.use((config) => {
       config.headers['X-TENANT-SLUG'] = slug;
     }
 
-    // Safety measure: Ensure no lingering tokens are attached
     delete config.headers['Authorization'];
     delete config.headers['X-CSRF-Token'];
-
   } else {
-    // ==========================================
-    // PROTECTED ROUTES: Attach Tokens ONLY
-    // ==========================================
     const accessToken = localStorage.getItem('access_token'); 
     const csrfToken = sessionStorage.getItem('csrf_token'); 
 
@@ -61,53 +43,87 @@ axiosClient.interceptors.request.use((config) => {
 });
 
 // ==========================================
-// 2. RESPONSE INTERCEPTOR (Handling 401s)
+// 2. RESPONSE INTERCEPTOR & QUEUE LOGIC
 // ==========================================
+
+// These variables act as the "traffic light" for multiple requests
+let isRefreshing = false;
+let failedQueue = [];
+
+// Helper function to process the waiting line of requests
+const processQueue = (error, token = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 axiosClient.interceptors.response.use(
   (response) => response, 
   async (error) => {
     const originalRequest = error.config;
-    console.log("Response interceptor is invoked for a 401");
-
-    // Trigger refresh logic on 401 Unauthorized, but only once per request
+    
+    // If it's a 401 and we haven't already retried this exact request
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; 
+      
+      // If a refresh is ALREADY happening, just join the queue and wait
+      if (isRefreshing) {
+        return new Promise(function(resolve, reject) {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          originalRequest.headers['Authorization'] = 'Bearer ' + token;
+          return axiosClient(originalRequest);
+        }).catch(err => {
+          return Promise.reject(err);
+        });
+      }
+
+      // If we are the FIRST request to fail, lock the traffic light
+      originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
-        // 1. Build the dynamic refresh URL
         const refreshUrl = `http://${currentHostname}/team-backend/api/refresh`;
 
-        // 2. Call the backend using base axios to avoid an interceptor infinite loop
         const refreshResponse = await axios.post(
           refreshUrl, 
-          { refresh: true }, // Dummy payload prevents Axios from dropping Content-Type header!
+          { refresh: true }, 
           { 
-            withCredentials: true, // Required to send the HTTP-only cookie
-            headers: {
-              'Content-Type': 'application/json' 
-            }
+            withCredentials: true,
+            headers: { 'Content-Type': 'application/json' }
           } 
         );
 
-        // Make sure this matches the exact JSON key your PHP backend returns 
-        // (e.g., .access_token vs .accessToken)
-        const newAccessToken = refreshResponse.data.access_token || refreshResponse.data.accessToken;
+        // Extract the token exactly as it appears in your screenshot
+        const newAccessToken = refreshResponse.data.data.access_token;
+        const newCsrfToken = refreshResponse.data.data.csrf_token;
 
-        // 3. Save the new token back to localStorage (Fixed key to match request interceptor)
+        // Save tokens immediately
         localStorage.setItem('access_token', newAccessToken);
+        sessionStorage.setItem('csrf_token', newCsrfToken); // Don't forget the CSRF!
 
-        // 4. Update the failed request's header with the new token
+        // Update the failing request's header
         originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
 
-        // 5. Retry the original request seamlessly
+        // Unlock the traffic light and release the queued requests
+        processQueue(null, newAccessToken);
+        isRefreshing = false;
+
+        // Finally, retry the original request
         return axiosClient(originalRequest);
         
       } catch (refreshError) {
-        // If the refresh token fails (expired/invalid/missing cookie), clear everything out
-        localStorage.removeItem('access_token'); // Fixed key
-        localStorage.removeItem('csrf_token');   // Fixed key
+        // If the refresh ACTUALLY fails, kill the queue and log out
+        processQueue(refreshError, null);
+        isRefreshing = false;
         
-        // Force redirect to login page
+        localStorage.removeItem('access_token'); 
+        sessionStorage.removeItem('csrf_token'); 
+        
         window.location.href = '/login'; 
         return Promise.reject(refreshError);
       }
