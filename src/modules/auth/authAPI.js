@@ -47,12 +47,22 @@ export const refreshTokenAPI = async () => {
 };
 
 export const logoutAPI = async () => {
-  const response = await axiosClient.post('/logout');
+  const response = await axiosClient.post('/logout',
+    { action: 'logout' }, 
+    {
+      withCredentials: true, // 👈 ADD THIS BACK IN!
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }
+  );
   return response.data;
 };
 
 export const fetchCsrfTokenAPI = async () => {
-  const response = await axiosClient.get('/api/auth/csrf-token');
+  const response = await axiosClient.get('/api/auth/csrf-token', 
+    
+  );
   return response.data; // { data: { csrf_token, expires_in } }
 };
 

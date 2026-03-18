@@ -1,18 +1,18 @@
 // src/components/layout/Sidebar.jsx
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom'; // <-- 1. Swapped Link to NavLink
+import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 import useAuth from '../../modules/auth/hooks/useAuth'; 
 import { LayoutDashboard, Users, Calendar, LogOut, Menu } from 'lucide-react';
 
 // --- Styled Components ---
-// src/components/layout/Sidebar.jsx
 
 const SidebarContainer = styled.nav`
-  width: ${(props) => (props.collapsed ? '64px' : '250px')};
+  /* Note the $ before collapsed */
+  width: ${(props) => (props.$collapsed ? '64px' : '250px')};
   background-color: ${(props) => props.theme.colors.sidebarBg};
   color: ${(props) => props.theme.colors.sidebarText};
-  padding: ${(props) => (props.collapsed ? '20px 8px' : '20px 12px')};
+  padding: ${(props) => (props.$collapsed ? '20px 8px' : '20px 12px')};
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -22,7 +22,7 @@ const SidebarContainer = styled.nav`
 const HeaderRow = styled.div`
   display: flex;
   align-items: center;
-  justify-content: ${(props) => (props.collapsed ? 'center' : 'space-between')};
+  justify-content: ${(props) => (props.$collapsed ? 'center' : 'space-between')};
   margin-bottom: 20px;
   padding: 0 10px;
 `;
@@ -30,7 +30,7 @@ const HeaderRow = styled.div`
 const Brand = styled.h2`
   margin: 0;
   font-size: 1.2rem;
-  display: ${(props) => (props.collapsed ? 'none' : 'block')};
+  display: ${(props) => (props.$collapsed ? 'none' : 'block')};
   white-space: nowrap;
 `;
 
@@ -53,13 +53,13 @@ const NavItem = styled(NavLink)`
   color: ${(props) => props.theme.colors.sidebarText};
   text-decoration: none;
   font-size: 16px;
-  padding: ${(props) => (props.collapsed ? '10px' : '12px')};
+  padding: ${(props) => (props.$collapsed ? '10px' : '12px')};
   border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 15px;
   transition: all 0.2s ease;
-  justify-content: ${(props) => (props.collapsed ? 'center' : 'flex-start')};
+  justify-content: ${(props) => (props.$collapsed ? 'center' : 'flex-start')};
 
   &:hover {
     background-color: ${(props) => props.theme.colors.sidebarHover};
@@ -73,13 +73,13 @@ const NavItem = styled(NavLink)`
 `;
 
 const NavLabel = styled.span`
-  display: ${(props) => (props.collapsed ? 'none' : 'block')};
+  display: ${(props) => (props.$collapsed ? 'none' : 'block')};
   white-space: nowrap;
 `;
 
 const LogoutButton = styled.button`
   margin-top: auto; 
-  padding: ${(props) => (props.collapsed ? '10px' : '12px')};
+  padding: ${(props) => (props.$collapsed ? '10px' : '12px')};
   background-color: ${(props) => props.theme.colors.danger};
   color: #ffffff;
   border: none;
@@ -89,10 +89,10 @@ const LogoutButton = styled.button`
   display: flex;
   align-items: center;
   gap: 15px;
-  justify-content: ${(props) => (props.collapsed ? 'center' : 'flex-start')};
+  justify-content: ${(props) => (props.$collapsed ? 'center' : 'flex-start')};
 
   &:hover {
-    opacity: 0.9; /* Works universally regardless of the danger color! */
+    opacity: 0.9; 
   }
 `;
 
@@ -101,36 +101,37 @@ const Sidebar = () => {
   const { logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
+  // We pass $collapsed instead of collapsed
   return (
-    <SidebarContainer collapsed={isCollapsed}>
+    <SidebarContainer $collapsed={isCollapsed}>
       
-      <HeaderRow collapsed={isCollapsed}>
-        <Brand collapsed={isCollapsed}>Workspace</Brand>
+      <HeaderRow $collapsed={isCollapsed}>
+        <Brand $collapsed={isCollapsed}>Workspace</Brand>
         <ToggleButton onClick={() => setIsCollapsed(!isCollapsed)}>
           <Menu size={24} />
         </ToggleButton>
       </HeaderRow>
 
       {/* Nav Links */}
-      <NavItem to="/dashboard" collapsed={isCollapsed}>
+      <NavItem to="/dashboard" $collapsed={isCollapsed}>
         <LayoutDashboard size={20} />
-        <NavLabel collapsed={isCollapsed}>Dashboard</NavLabel>
+        <NavLabel $collapsed={isCollapsed}>Dashboard</NavLabel>
       </NavItem>
 
-      <NavItem to="/patients" collapsed={isCollapsed}>
+      <NavItem to="/patients" $collapsed={isCollapsed}>
         <Users size={20} />
-        <NavLabel collapsed={isCollapsed}>Patients</NavLabel>
+        <NavLabel $collapsed={isCollapsed}>Patients</NavLabel>
       </NavItem>
 
-      <NavItem to="/appointments" collapsed={isCollapsed}>
+      <NavItem to="/appointments" $collapsed={isCollapsed}>
         <Calendar size={20} />
-        <NavLabel collapsed={isCollapsed}>Appointments</NavLabel>
+        <NavLabel $collapsed={isCollapsed}>Appointments</NavLabel>
       </NavItem>
       
       {/* Logout */}
-      <LogoutButton onClick={logout} collapsed={isCollapsed}>
+      <LogoutButton onClick={logout} $collapsed={isCollapsed}>
         <LogOut size={20} />
-        <NavLabel collapsed={isCollapsed}>Logout</NavLabel>
+        <NavLabel $collapsed={isCollapsed}>Logout</NavLabel>
       </LogoutButton>
 
     </SidebarContainer>

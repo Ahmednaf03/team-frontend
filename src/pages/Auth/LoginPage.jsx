@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../../modules/auth/hooks/useAuth';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, useTheme } from 'styled-components';
 import { 
   User, Lock, Eye, EyeOff, Activity, 
   ShieldCheck, HeartPulse, Calendar, ServerCrash 
@@ -297,7 +297,7 @@ export default function LoginPage() {
   const [username, setUsername]       = useState('');
   const [password, setPassword]       = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
+const theme = useTheme(); 
   const usernameRef = useRef(null);
 
   useEffect(() => {
@@ -342,7 +342,7 @@ export default function LoginPage() {
             
             {error && (
               <ErrorAlert role="alert">
-                <ServerCrash size={20} color="#e74c3c" />
+               <ServerCrash size={20} color={theme.colors.danger} />
                 <span>{error}</span>
               </ErrorAlert>
             )}
@@ -408,9 +408,9 @@ export default function LoginPage() {
       {/* ── 2. RIGHT HERO PANEL ── */}
       <HeroPanel>
         <div style={{ marginBottom: '40px', textAlign: 'center' }}>
-          <Activity size={48} color={(props) => props.theme.colors.primary} style={{ marginBottom: '10px' }}/>
-          <h2 style={{ fontSize: '28px', margin: 0, color: (props) => props.theme.colors.text }}>Healthcare, Unified.</h2>
-          <p style={{ color: (props) => props.theme.colors.textSecondary, marginTop: '10px' }}>Everything you need to manage your practice.</p>
+          <Activity size={48} color={theme.colors.primary} style={{ marginBottom: '10px' }}/>
+          <h2 style={{ fontSize: '28px', margin: 0, color: theme.colors.text }}>Healthcare, Unified.</h2>
+          <p style={{ color: theme.colors.textSecondary, marginTop: '10px' }}>Everything you need to manage your practice.</p>
         </div>
 
         <FeatureGrid>
