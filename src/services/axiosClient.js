@@ -35,6 +35,9 @@ axiosClient.interceptors.request.use((config) => {
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
     }
+
+    console.log("csrf token attached ", config.headers['X-CSRF-Token']);
+    
   }
 
   return config;
@@ -86,28 +89,38 @@ axiosClient.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      try {
+try {
         const refreshUrl = `http://${currentHostname}/team-backend/api/refresh`;
+        
+        // 1. Grab the current Tenant Slug and CSRF Token manually
+        const slug = currentHostname.split('.')[0];
+        const currentCsrf = sessionStorage.getItem('csrf_token');
 
+        // 2. Attach them to the raw axios call so PHP accepts it
         const refreshResponse = await axios.post(
           refreshUrl, 
           { refresh: true }, 
           { 
             withCredentials: true,
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 
+              'Content-Type': 'application/json',
+              'X-TENANT-SLUG': slug !== 'localhost' ? slug : '', // Add the slug!
+              'X-CSRF-Token': currentCsrf // Add the current CSRF token!
+            }
           } 
         );
 
-        // Extract the token exactly as it appears in your screenshot
+        // Extract the new tokens
         const newAccessToken = refreshResponse.data.data.access_token;
         const newCsrfToken = refreshResponse.data.data.csrf_token;
 
         // Save tokens immediately
         localStorage.setItem('access_token', newAccessToken);
-        sessionStorage.setItem('csrf_token', newCsrfToken); // Don't forget the CSRF!
+        sessionStorage.setItem('csrf_token', newCsrfToken); 
 
-        // Update the failing request's header
+        // 3. Update the failing request's headers with BOTH new tokens
         originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+        originalRequest.headers['X-CSRF-Token'] = newCsrfToken;
 
         // Unlock the traffic light and release the queued requests
         processQueue(null, newAccessToken);
