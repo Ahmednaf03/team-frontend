@@ -108,7 +108,7 @@ export default function AppRouter() {
                             <Route
                 element={
                   <RoleBasedRoute
-                    roles={['Admin', 'Provider', 'Nurse', 'Receptionist']}
+                    roles={['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']}
                   />
                 }
               >

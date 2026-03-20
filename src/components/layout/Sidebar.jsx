@@ -1,9 +1,11 @@
 // src/components/layout/Sidebar.jsx
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import styled from 'styled-components';
 import useAuth from '../../modules/auth/hooks/useAuth'; 
-import { LayoutDashboard, Users, Calendar, LogOut, Menu, NotebookIcon, ReceiptCentIcon, ReceiptIcon } from 'lucide-react';
+import { selectUserRole } from '../../modules/auth/selectors';
+import { LayoutDashboard, Users, Calendar, LogOut, Menu, NotebookIcon, ReceiptCentIcon, ReceiptIcon, Settings, Shield } from 'lucide-react';
 
 // --- Styled Components ---
 
@@ -100,6 +102,12 @@ const LogoutButton = styled.button`
 const Sidebar = () => {
   const { logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const userRole = useSelector(selectUserRole);
+
+  const hasAccess = (allowedRoles) => {
+    if (!userRole) return false;
+    return allowedRoles.map(r => r.toLowerCase()).includes(userRole.toLowerCase());
+  };
 
   // We pass $collapsed instead of collapsed
   return (
@@ -118,24 +126,47 @@ const Sidebar = () => {
         <NavLabel $collapsed={isCollapsed}>Dashboard</NavLabel>
       </NavItem>
 
-      <NavItem to="/patients" $collapsed={isCollapsed}>
-        <Users size={20} />
-        <NavLabel $collapsed={isCollapsed}>Patients</NavLabel>
-      </NavItem>
+      {hasAccess(['Admin', 'Provider', 'Nurse', 'Receptionist']) && (
+        <NavItem to="/patients" $collapsed={isCollapsed}>
+          <Users size={20} />
+          <NavLabel $collapsed={isCollapsed}>Patients</NavLabel>
+        </NavItem>
+      )}
 
-      <NavItem to="/appointments" $collapsed={isCollapsed}>
-        <Calendar size={20} />
-        <NavLabel $collapsed={isCollapsed}>Appointments</NavLabel>
-      </NavItem>
+      {hasAccess(['Admin', 'Provider', 'Nurse', 'Receptionist']) && (
+        <NavItem to="/appointments" $collapsed={isCollapsed}>
+          <Calendar size={20} />
+          <NavLabel $collapsed={isCollapsed}>Appointments</NavLabel>
+        </NavItem>
+      )}
+
+      {hasAccess(['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']) && (
         <NavItem to="/prescriptions" $collapsed={isCollapsed}>
-        <NotebookIcon size={20} />
-        <NavLabel $collapsed={isCollapsed}>Prescriptions</NavLabel>
-      </NavItem>
+          <NotebookIcon size={20} />
+          <NavLabel $collapsed={isCollapsed}>Prescriptions</NavLabel>
+        </NavItem>
+      )}
 
+      {hasAccess(['Admin', 'Provider']) && (
         <NavItem to="/billing" $collapsed={isCollapsed}>
-        <ReceiptIcon size={20} />
-        <NavLabel $collapsed={isCollapsed}>Billing</NavLabel>
-      </NavItem>
+          <ReceiptIcon size={20} />
+          <NavLabel $collapsed={isCollapsed}>Billing</NavLabel>
+        </NavItem>
+      )}
+
+      {hasAccess(['Admin']) && (
+        <NavItem to="/staff" $collapsed={isCollapsed}>
+          <Shield size={20} />
+          <NavLabel $collapsed={isCollapsed}>Staff</NavLabel>
+        </NavItem>
+      )}
+
+      {hasAccess(['Admin']) && (
+        <NavItem to="/settings/users" $collapsed={isCollapsed}>
+          <Settings size={20} />
+          <NavLabel $collapsed={isCollapsed}>Settings</NavLabel>
+        </NavItem>
+      )}
 
       
       
