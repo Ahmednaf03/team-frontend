@@ -1,17 +1,20 @@
 import { configureStore } from '@reduxjs/toolkit';
 import createSagaMiddleware from 'redux-saga';
+import appointmentReducer from '../modules/appointments/appointmentSlice';
 import authReducer from '../modules/auth/authSlice';
 import rootSaga from './rootSaga';
+import calendarReducer from '../modules/calendar/calendarSlice';
 
 const sagaMiddleware = createSagaMiddleware();
 
 const store = configureStore({
   reducer: {
     auth: authReducer,
+    appointments: appointmentReducer,
+    calendar: calendarReducer,
     // Future modules plug in here:
     // tenant:       tenantReducer,
     // patients:     patientReducer,
-    // appointments: appointmentReducer,
     // billing:      billingReducer,
     // notifications:notificationReducer,
   },

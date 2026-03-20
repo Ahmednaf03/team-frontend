@@ -31,6 +31,7 @@ axiosClient.interceptors.request.use((config) => {
     if (accessToken) {
       config.headers['Authorization'] = `Bearer ${accessToken}`;
     }
+    console.log("attached access token ",config.headers['Authorization']);
 
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
