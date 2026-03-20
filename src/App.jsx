@@ -9,7 +9,8 @@ import axiosClient from './services/axiosClient';
 import AppRouter from './routes/AppRouter'; 
 import { CustomThemeProvider } from './context/ThemeContext'; 
 import ErrorBoundary from './components/layout/ErrorBoundary'; // <-- 1. Import it
-
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 const App = () => {
   const tenantSlug = getTenantSlug();
   const [tenantConfig, setTenantConfig] = useState(null);
@@ -52,6 +53,17 @@ const App = () => {
         {/* 2. Wrap the Router in the global Error Boundary */}
         <ErrorBoundary>
           <AppRouter tenantConfig={tenantConfig} />
+           <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
         </ErrorBoundary>
       </CustomThemeProvider>
     </Provider>
