@@ -2,43 +2,60 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useDispatch } from 'react-redux';
 import { logoutRequest } from '../modules/auth/authSlice';
 
-/**
- * useIdleLogout
- *
- * Automatically dispatches logoutRequest after `timeoutMs` of inactivity.
- * Resets the timer on: mousemove, keydown, click, scroll, touchstart.
- *
- * Only active when isLoggedIn is true.
- *
- * @param {boolean} isLoggedIn  - Only arm the timer when user is authenticated
- * @param {number}  timeoutMs   - Inactivity duration before logout (default: 15 min)
- */
-export default function useIdleLogout(isLoggedIn, timeoutMs = 15 * 60 * 1000) {
-  const dispatch = useDispatch();
-  const timerRef = useRef(null);
+// If you have toast library, e.g. react-toastify:
+import { toast } from 'react-toastify';
 
-  const resetTimer = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
+export default function useIdleLogout(
+  isLoggedIn,
+  timeoutMs =  60 * 15 * 1000,
+  warningMs = 10 * 1000,
+  onWarning = () => {
+    toast.warn('Inactive, you will be logged out shortly');
+  }
+) {
+  const dispatch = useDispatch();
+  const logoutTimerRef = useRef(null);
+  const warningTimerRef = useRef(null);
+
+  const clearTimers = useCallback(() => {
+    if (warningTimerRef.current) {
+      clearTimeout(warningTimerRef.current);
+      warningTimerRef.current = null;
+    }
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleTimers = useCallback(() => {
+    clearTimers();
+
+    const warningDelay = Math.max(0, timeoutMs - warningMs);
+    warningTimerRef.current = setTimeout(() => {
+      onWarning(); // e.g. toast.warn('Inactive, you will be logged out shortly');
+    }, warningDelay);
+
+    logoutTimerRef.current = setTimeout(() => {
       dispatch(logoutRequest());
+      clearTimers();
     }, timeoutMs);
-  }, [dispatch, timeoutMs]);
+  }, [clearTimers, dispatch, onWarning, timeoutMs, warningMs]);
 
   useEffect(() => {
     if (!isLoggedIn) {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      clearTimers();
       return;
     }
 
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    events.forEach((e) =>
-      window.addEventListener(e, resetTimer, { passive: true })
-    );
-    resetTimer(); // Arm on mount
+    events.forEach((name) => window.addEventListener(name, scheduleTimers, { passive: true }));
+
+    scheduleTimers();
 
     return () => {
-      events.forEach((e) => window.removeEventListener(e, resetTimer));
-      if (timerRef.current) clearTimeout(timerRef.current);
+      events.forEach((name) => window.removeEventListener(name, scheduleTimers));
+      clearTimers();
     };
-  }, [isLoggedIn, resetTimer]);
+  }, [isLoggedIn, scheduleTimers, clearTimers]);
 }

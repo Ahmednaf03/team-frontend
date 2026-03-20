@@ -10,6 +10,7 @@ import Layout from '../components/layout/Layout';
 
 // Auth pages — eagerly loaded (needed on every first visit)
 import LoginPage from '../pages/Auth/LoginPage';
+import Prescriptions from '../pages/Prescriptions/Prescriptions';
 
 // All post-login pages — lazy loaded (teammates fill these in)
 const DashboardPage       = lazy(() => import('../pages/Dashboard/DashboardPage'));
@@ -102,6 +103,17 @@ export default function AppRouter() {
               >
                 <Route path="/appointments"         element={<AppointmentList />} />
                 <Route path="/appointments/calendar" element={<AppointmentCalendar />} />
+              </Route>
+
+                            <Route
+                element={
+                  <RoleBasedRoute
+                    roles={['Admin', 'Provider', 'Nurse', 'Receptionist']}
+                  />
+                }
+              >
+                <Route path="/prescriptions"      element={<Prescriptions />} />
+                {/* <Route path="/appointments/calendar" element={<AppointmentCalendar />} /> */}
               </Route>
 
               {/* Billing — Admin, Provider */}

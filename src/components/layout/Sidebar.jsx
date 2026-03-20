@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 import useAuth from '../../modules/auth/hooks/useAuth'; 
-import { LayoutDashboard, Users, Calendar, LogOut, Menu } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, LogOut, Menu, NotebookIcon, ReceiptCentIcon, ReceiptIcon } from 'lucide-react';
 
 // --- Styled Components ---
 
@@ -127,6 +127,17 @@ const Sidebar = () => {
         <Calendar size={20} />
         <NavLabel $collapsed={isCollapsed}>Appointments</NavLabel>
       </NavItem>
+        <NavItem to="/prescriptions" $collapsed={isCollapsed}>
+        <NotebookIcon size={20} />
+        <NavLabel $collapsed={isCollapsed}>Prescriptions</NavLabel>
+      </NavItem>
+
+        <NavItem to="/billing" $collapsed={isCollapsed}>
+        <ReceiptIcon size={20} />
+        <NavLabel $collapsed={isCollapsed}>Billing</NavLabel>
+      </NavItem>
+
+      
       
       {/* Logout */}
       <LogoutButton onClick={logout} $collapsed={isCollapsed}>
