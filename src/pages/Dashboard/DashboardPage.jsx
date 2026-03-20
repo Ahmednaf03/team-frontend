@@ -54,7 +54,6 @@ const DashboardPage = () => {
   return (
     <PageContainer>
       <PageTitle>Overview</PageTitle>
-      {/* <h2>{brokenBackendData.patientCount}</h2> */}
       <StatsGrid>
         
         <StatCard>
