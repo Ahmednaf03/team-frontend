@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const currentHostname = window.location.hostname;
-const dynamicBaseUrl = `http://${currentHostname}/team-backend/api`;
+const dynamicBaseUrl = `http://${currentHostname}/api`;
 
 const axiosClient = axios.create({
   baseURL: dynamicBaseUrl,
@@ -91,7 +91,7 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
 try {
-        const refreshUrl = `http://${currentHostname}/team-backend/api/refresh`;
+       const refreshUrl = `http://${currentHostname}/api/refresh`;
         
         // 1. Grab the current Tenant Slug and CSRF Token manually
         const slug = currentHostname.split('.')[0];
