@@ -1,7 +1,7 @@
 // src/contexts/ThemeContext.jsx
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { ThemeProvider as StyledThemeProvider } from 'styled-components';
-import { ConfigProvider, theme as antdTheme } from 'antd';
+import { ConfigProvider, theme as antdTheme, App } from 'antd';
 
 // Import your theme dictionaries and global styles
 import { lightTheme } from '../themes/theme';
@@ -54,9 +54,11 @@ export const CustomThemeProvider = ({ children, initialTheme = 'default' }) => {
             },
           }}
         >
-          {/* GlobalStyle applies the background color to the entire <body> */}
-          <GlobalStyle />
-          {children}
+          <App>
+            {/* GlobalStyle applies the background color to the entire <body> */}
+            <GlobalStyle />
+            {children}
+          </App>
         </ConfigProvider>
       </StyledThemeProvider>
     </ThemeContext.Provider>
