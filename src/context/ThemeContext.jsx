@@ -1,6 +1,7 @@
 // src/contexts/ThemeContext.jsx
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { ThemeProvider as StyledThemeProvider } from 'styled-components';
+import { ConfigProvider, theme as antdTheme, App } from 'antd';
 
 // Import your theme dictionaries and global styles
 import { lightTheme } from '../themes/theme';
@@ -40,9 +41,25 @@ export const CustomThemeProvider = ({ children, initialTheme = 'default' }) => {
     <ThemeContext.Provider value={{ themeName, setThemeName }}>
       {/* This is the styled-components provider that passes colors to all your styled components */}
       <StyledThemeProvider theme={currentThemeObject}>
-        {/* GlobalStyle applies the background color to the entire <body> */}
-        <GlobalStyle />
-        {children}
+        {/* ConfigProvider applies the theme to Ant Design components like Table, Select, Modal */}
+        <ConfigProvider
+          theme={{
+            algorithm: themeName === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+            token: {
+              ...(themeName === 'warm' && {
+                colorPrimary: warmTheme.colors.primary,
+                colorBgBase: warmTheme.colors.background,
+                colorTextBase: warmTheme.colors.text,
+              }),
+            },
+          }}
+        >
+          <App>
+            {/* GlobalStyle applies the background color to the entire <body> */}
+            <GlobalStyle />
+            {children}
+          </App>
+        </ConfigProvider>
       </StyledThemeProvider>
     </ThemeContext.Provider>
   );

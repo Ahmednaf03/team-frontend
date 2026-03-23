@@ -14,7 +14,7 @@ import { createSlice } from '@reduxjs/toolkit';
  *   searchQuery   → current search string
  */
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 5;
 
 const initialState = {
   list: [],

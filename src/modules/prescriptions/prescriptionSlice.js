@@ -17,13 +17,15 @@ import { createSlice } from '@reduxjs/toolkit';
  *   pagination        → { page, pageSize, total, hasNext, hasPrev }
  */
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 5;
 
 const initialState = {
   list: [],
   filtered: [],
+  prefetchedPages: {},
   currentPrescription: null,
   loading: false,
+  prefetching: false,
   detailLoading: false,
   submitting: false,
   error: null,
@@ -82,12 +84,33 @@ const prescriptionSlice = createSlice({
       state.list = action.payload;
       const filtered = applyFilters(action.payload, state.searchQuery, state.statusFilter);
       state.filtered = filtered;
-      state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
+      state.pagination = computePagination(
+      filtered.length,  // ← use local variable, not state.filtered
+      1,
+      state.pagination.pageSize
+    );
     },
     fetchPrescriptionsFailure: (state, action) => {
       state.loading = false;
       state.error = action.payload;
     },
+
+prefetchPageRequest: (state) => {
+  state.prefetching = true;
+},
+prefetchPageSuccess: (state, action) => {
+  const { page, data } = action.payload;
+  state.prefetching = false;
+  state.prefetchedPages[page] = data; // cache it
+},
+prefetchPageFailure: (state) => {
+  state.prefetching = false;
+},
+
+// ── Clear prefetch cache when filters/search change ────────────────────────
+clearPrefetchCache: (state) => {
+  state.prefetchedPages = {};
+},
 
     // ── Fetch By ID ────────────────────────────────────────────────────────
     fetchPrescriptionByIdRequest: (state) => {
@@ -155,19 +178,33 @@ const prescriptionSlice = createSlice({
       state.error = action.payload;
     },
 
-    // ── Search & Filter ────────────────────────────────────────────────────
-    setSearchQuery: (state, action) => {
-      state.searchQuery = action.payload;
-      const filtered = applyFilters(state.list, action.payload, state.statusFilter);
-      state.filtered = filtered;
-      state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
-    },
-    setStatusFilter: (state, action) => {
-      state.statusFilter = action.payload;
-      const filtered = applyFilters(state.list, state.searchQuery, action.payload);
-      state.filtered = filtered;
-      state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
-    },
+   setSearchQuery: (state, action) => {
+  state.searchQuery = action.payload;
+  state.prefetchedPages = {}; // ← ADD: clear cache on search
+  const filtered = applyFilters(state.list, action.payload, state.statusFilter);
+  state.filtered = filtered;
+  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
+},
+setStatusFilter: (state, action) => {
+  state.statusFilter = action.payload;
+  state.prefetchedPages = {}; // ← ADD: clear cache on filter
+  const filtered = applyFilters(state.list, state.searchQuery, action.payload);
+  state.filtered = filtered;
+  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
+},setSearchQuery: (state, action) => {
+  state.searchQuery = action.payload;
+  state.prefetchedPages = {}; // ←  clear cache on search
+  const filtered = applyFilters(state.list, action.payload, state.statusFilter);
+  state.filtered = filtered;
+  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
+},
+setStatusFilter: (state, action) => {
+  state.statusFilter = action.payload;
+  state.prefetchedPages = {}; // ←  clear cache on filter
+  const filtered = applyFilters(state.list, state.searchQuery, action.payload);
+  state.filtered = filtered;
+  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
+},
 
     // ── Pagination ─────────────────────────────────────────────────────────
     nextPage: (state) => {
@@ -222,6 +259,10 @@ export const {
   setCurrentPrescription,
   clearCurrentPrescription,
   clearError,
+  prefetchPageRequest,
+  prefetchPageSuccess,
+  prefetchPageFailure,
+  clearPrefetchCache,
 } = prescriptionSlice.actions;
 
 export default prescriptionSlice.reducer;

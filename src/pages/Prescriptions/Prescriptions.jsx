@@ -599,8 +599,8 @@ const Prescriptions = () => {
   const role = user?.role?.toLowerCase();
 
   const canCreate  = ['admin', 'provider'].includes(role);
-  const canVerify  = role === 'pharmacist';
-  const canDispense = role === 'pharmacist';
+const canVerify   = ['pharmacist', 'admin'].includes(role);
+const canDispense = ['pharmacist', 'admin'].includes(role);
 
   const {
     prescriptions, currentPrescription, loading, detailLoading, submitting,
@@ -680,7 +680,15 @@ const Prescriptions = () => {
     };
 
     createPrescription(data, (responseData) => {
+      // console.log('Response data:', responseData);
       const rxId = responseData?.prescription_id;
+      // console.log('Prescription ID:', rxId); 
+      //     if (!rxId) {
+      // toast.error('Prescription created but ID missing. Please add medicines manually.');
+    //   setModal(null);
+    //   fetchPrescriptions();
+    //   return;
+    // }
       toast.success('Prescription created! Now add medicines. 💊');
       setNewPrescriptionId(rxId);
       setItemForm(EMPTY_ITEM);

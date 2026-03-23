@@ -46,13 +46,13 @@ export const addPrescriptionItemAPI = async (data) => {
 // ── Pharmacist: Verify Prescription ──────────────────────────────────────────
 // PENDING → VERIFIED
 export const verifyPrescriptionAPI = async (id) => {
-  const response = await axiosClient.patch(`/prescriptions/verify/${id}`);
+  const response = await axiosClient.patch(`/prescriptions/verify/${id}`,{});
   return response.data; // { status: 200, message: 'Prescription verified successfully' }
 };
 
 // ── Pharmacist: Dispense Prescription ────────────────────────────────────────
 // VERIFIED → DISPENSED  (reduces stock for every item)
 export const dispensePrescriptionAPI = async (id) => {
-  const response = await axiosClient.patch(`/prescriptions/dispense/${id}`);
+  const response = await axiosClient.patch(`/prescriptions/dispense/${id}`,{});
   return response.data; // { status: 200, message: 'Prescription dispensed successfully' }
 };

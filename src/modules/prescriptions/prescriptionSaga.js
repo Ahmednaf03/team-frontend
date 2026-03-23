@@ -27,6 +27,9 @@ import {
   dispenseRequest,
   dispenseSuccess,
   dispenseFailure,
+  prefetchPageRequest,
+  prefetchPageSuccess,
+  prefetchPageFailure,
 } from './prescriptionSlice';
 
 // ── Fetch All ─────────────────────────────────────────────────────────────────
@@ -110,6 +113,25 @@ function* handleDispense(action) {
   }
 }
 
+function* handlePrefetchPage(action) {
+  try {
+    // action.payload = { page, filtered, pageSize }
+    const { page, filtered, pageSize } = action.payload;
+
+    // slice the already-fetched filtered array — no extra API call needed
+    const startIdx = (page - 1) * pageSize;
+    const data = filtered.slice(startIdx, startIdx + pageSize);
+
+    // small delay so it doesn't compete with current page render
+    yield new Promise((resolve) => setTimeout(resolve, 100));
+
+    yield put(prefetchPageSuccess({ page, data }));
+  } catch (error) {
+    yield put(prefetchPageFailure());
+  }
+}
+
+
 // ── Root Saga ─────────────────────────────────────────────────────────────────
 export default function* prescriptionSaga() {
   yield takeLatest(fetchPrescriptionsRequest.type, handleFetchPrescriptions);
@@ -118,4 +140,5 @@ export default function* prescriptionSaga() {
   yield takeEvery(addItemRequest.type, handleAddItem);
   yield takeEvery(verifyRequest.type, handleVerify);
   yield takeEvery(dispenseRequest.type, handleDispense);
+  yield takeEvery(prefetchPageRequest.type, handlePrefetchPage);
 }

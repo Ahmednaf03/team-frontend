@@ -1,6 +1,6 @@
 // src/modules/prescriptions/hooks/usePrescriptions.js
-import { useDispatch, useSelector } from 'react-redux';
-import { useCallback } from 'react';
+import { useDispatch, useSelector  } from 'react-redux';
+import { useCallback, useMemo } from 'react';
 import {
   fetchPrescriptionsRequest,
   fetchPrescriptionByIdRequest,
@@ -14,6 +14,7 @@ import {
   prevPage,
   clearCurrentPrescription,
   clearError,
+    prefetchPageRequest,
 } from '../prescriptionSlice';
 
 /**
@@ -37,8 +38,10 @@ export default function usePrescriptions() {
   const {
     list,
     filtered,
+    prefetchedPages,
     currentPrescription,
     loading,
+    prefetching,  
     detailLoading,
     submitting,
     error,
@@ -49,10 +52,16 @@ export default function usePrescriptions() {
 
   const { page, pageSize, total, hasNext, hasPrev } = pagination;
 
-  // Paginated slice of filtered results
-  const startIdx = (page - 1) * pageSize;
-  const prescriptions = filtered.slice(startIdx, startIdx + pageSize);
-  const totalPages = Math.ceil(total / pageSize) || 1;
+  //  the plain calculation with useMemo
+  const { prescriptions, totalPages } = useMemo(() => {
+    const startIdx = (page - 1) * pageSize;
+    const paginated = filtered.slice(startIdx, startIdx + pageSize);
+    const pages = Math.ceil(filtered.length / pageSize) || 1;
+    return {
+      prescriptions: paginated,
+      totalPages: pages,
+    };
+  }, [filtered, page, pageSize]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 

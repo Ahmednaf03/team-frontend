@@ -32,6 +32,7 @@ axiosClient.interceptors.request.use((config) => {
     if (accessToken) {
       config.headers['Authorization'] = `Bearer ${accessToken}`;
     }
+    console.log("attached access token ",config.headers['Authorization']);
 
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
@@ -91,7 +92,7 @@ axiosClient.interceptors.response.use(
       isRefreshing = true;
 
 try {
-        const refreshUrl = `http://${currentHostname}/team-backend/api/refresh`;
+       const refreshUrl = `http://${currentHostname}/api/refresh`;
         
         // 1. Grab the current Tenant Slug and CSRF Token manually
         const slug = currentHostname.split('.')[0];

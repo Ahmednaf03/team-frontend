@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import createSagaMiddleware from 'redux-saga';
 import rootReducer from './rootReducer'; 
 import rootSaga from './rootSaga';
+import calendarReducer from '../modules/calendar/calendarSlice';
 
 const sagaMiddleware = createSagaMiddleware();
 
