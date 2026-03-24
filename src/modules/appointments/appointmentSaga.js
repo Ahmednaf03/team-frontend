@@ -98,7 +98,7 @@ function* handleFetchAppointments() {
       })
     );
   } catch (error) {
-    console.log('Fetch error:', error); 
+    console.log('Fetch error:', error);
     const message =
       error.response?.data?.message ||
       error.response?.data?.error ||
@@ -140,6 +140,8 @@ function* handleCreateAppointment(action) {
     const responseData = yield call(createAppointmentAPI, action.payload);
     const data = unwrapAppointment(responseData);
     yield put(createAppointmentSuccess(enrichAppointment(data)));
+
+    // Refresh data to ensure UI is in sync
     yield put(fetchAppointmentsRequest());
     yield put(fetchUpcomingRequest());
   } catch (error) {
@@ -157,7 +159,7 @@ function* handleUpdateAppointment(action) {
     const responseData = yield call(updateAppointmentAPI, action.payload);
     // Backend returns a success string, not the updated object
     yield put(updateAppointmentSuccess(responseData.message || responseData));
-    
+
     // Refresh data to ensure UI is in sync
     yield put(fetchAppointmentsRequest());
     yield put(fetchUpcomingRequest());
@@ -190,7 +192,7 @@ function* handleCancelAppointment(action) {
 // ── Delete ────────────────────────────────────────────────────────────────────
 function* handleDeleteAppointment(action) {
   try {
-    console.log("action payload data: ",action.payload);
+    console.log("action payload data: ", action.payload);
     yield call(deleteAppointmentAPI, action.payload);
     yield put(deleteAppointmentSuccess(action.payload)); // pass id for list removal
   } catch (error) {

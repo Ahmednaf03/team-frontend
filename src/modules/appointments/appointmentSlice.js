@@ -95,9 +95,10 @@ const appointmentSlice = createSlice({
       state.success = null;
     },
     createAppointmentSuccess: (state, action) => {
-      state.list = [action.payload, ...state.list];
       state.actionLoading = false;
-      state.success = 'Appointment created successfully.';
+      state.success = typeof action.payload === 'string'
+        ? action.payload
+        : 'Appointment created successfully.';
     },
     createAppointmentFailure: (state, action) => {
       state.actionLoading = false;

@@ -6,23 +6,23 @@ import useIdleLogout from '../hooks/useIdleLogout';
 import ProtectedRoute from './ProtectedRoute';
 import RoleBasedRoute from './RoleBasedRoute';
 // 1. Import the Layout component
-import Layout from '../components/layout/Layout'; 
+import Layout from '../components/layout/Layout';
 
 // Auth pages — eagerly loaded (needed on every first visit)
 import LoginPage from '../pages/Auth/LoginPage';
 import Prescriptions from '../pages/Prescriptions/Prescriptions';
 
 // All post-login pages — lazy loaded (teammates fill these in)
-const DashboardPage       = lazy(() => import('../pages/Dashboard/DashboardPage'));
-const PatientList         = lazy(() => import('../pages/Patients/PatientList'));
-const PatientProfile      = lazy(() => import('../pages/Patients/PatientProfile'));
-const AppointmentList     = lazy(() => import('../pages/Appointments/AppointmentList'));
+const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage'));
+const PatientList = lazy(() => import('../pages/Patients/PatientList'));
+const PatientProfile = lazy(() => import('../pages/Patients/PatientProfile'));
+const AppointmentList = lazy(() => import('../pages/Appointments/AppointmentList'));
 const AppointmentCalendar = lazy(() => import('../pages/Appointments/AppointmentCalendar'));
-const InvoicePage         = lazy(() => import('../pages/Billing/InvoicePage'));
-const StaffManagement     = lazy(() => import('../pages/Staff/StaffManagement'));
-const UserManagement      = lazy(() => import('../pages/Settings/UserManagement'));
-const SecuritySettings    = lazy(() => import('../pages/Settings/SecuritySettings'));
-const ForgotPassword      = lazy(() => import('../pages/Auth/ForgotPassword'));
+const InvoicePage = lazy(() => import('../pages/Billing/InvoicePage'));
+const StaffManagement = lazy(() => import('../pages/Staff/StaffManagement'));
+const UserManagement = lazy(() => import('../pages/Settings/UserManagement'));
+const SecuritySettings = lazy(() => import('../pages/Settings/SecuritySettings'));
+const ForgotPassword = lazy(() => import('../pages/Auth/ForgotPassword'));
 
 // Minimal loading fallback
 const PageLoader = () => (
@@ -81,7 +81,7 @@ export default function AppRouter({ tenantConfig }) {
 
           {/* ── Protected (any authenticated role) ──────────────────────── */}
           <Route element={<ProtectedRoute />}>
-            
+
             {/* 2. THE UI LAYOUT WRAPPER ─────────────────────────────────── */}
             <Route element={<Layout />}>
 
@@ -95,7 +95,7 @@ export default function AppRouter({ tenantConfig }) {
                   />
                 }
               >
-                <Route path="/patients"     element={<PatientList />} />
+                <Route path="/patients" element={<PatientList />} />
                 <Route path="/patients/:id" element={<PatientProfile />} />
               </Route>
 
@@ -107,18 +107,18 @@ export default function AppRouter({ tenantConfig }) {
                   />
                 }
               >
-                <Route path="/appointments"         element={<AppointmentList />} />
+                <Route path="/appointments" element={<AppointmentList />} />
                 <Route path="/appointments/calendar" element={<AppointmentCalendar />} />
               </Route>
 
-                            <Route
+              <Route
                 element={
                   <RoleBasedRoute
                     roles={['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']}
                   />
                 }
               >
-                <Route path="/prescriptions"      element={<Prescriptions />} />
+                <Route path="/prescriptions" element={<Prescriptions />} />
                 {/* <Route path="/appointments/calendar" element={<AppointmentCalendar />} /> */}
               </Route>
 
@@ -136,7 +136,7 @@ export default function AppRouter({ tenantConfig }) {
 
               {/* Settings — Admin only */}
               <Route element={<RoleBasedRoute roles={['Admin']} />}>
-                <Route path="/settings/users"    element={<UserManagement />} />
+                <Route path="/settings/users" element={<UserManagement />} />
                 <Route path="/settings/security" element={<SecuritySettings />} />
               </Route>
 
