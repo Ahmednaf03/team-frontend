@@ -62,7 +62,7 @@ function* handleFetchAppointments() {
       })
     );
   } catch (error) {
-    console.log('Fetch error:', error); 
+    console.log('Fetch error:', error);
     const message =
       error.response?.data?.message ||
       error.response?.data?.error ||
@@ -102,8 +102,11 @@ function* handleFetchAppointmentById(action) {
 function* handleCreateAppointment(action) {
   try {
     const responseData = yield call(createAppointmentAPI, action.payload);
-    const data = responseData.data ?? responseData;
-    yield put(createAppointmentSuccess(enrichAppointment(data)));
+    yield put(createAppointmentSuccess(responseData.message || responseData));
+
+    // Refresh data to ensure UI is in sync
+    yield put(fetchAppointmentsRequest());
+    yield put(fetchUpcomingRequest());
   } catch (error) {
     const message =
       error.response?.data?.message ||
@@ -119,7 +122,7 @@ function* handleUpdateAppointment(action) {
     const responseData = yield call(updateAppointmentAPI, action.payload);
     // Backend returns a success string, not the updated object
     yield put(updateAppointmentSuccess(responseData.message || responseData));
-    
+
     // Refresh data to ensure UI is in sync
     yield put(fetchAppointmentsRequest());
     yield put(fetchUpcomingRequest());
@@ -152,7 +155,7 @@ function* handleCancelAppointment(action) {
 // ── Delete ────────────────────────────────────────────────────────────────────
 function* handleDeleteAppointment(action) {
   try {
-    console.log("action payload data: ",action.payload);
+    console.log("action payload data: ", action.payload);
     yield call(deleteAppointmentAPI, action.payload);
     yield put(deleteAppointmentSuccess(action.payload)); // pass id for list removal
   } catch (error) {

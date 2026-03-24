@@ -48,26 +48,26 @@ const AppointmentFormModal = ({ open, onClose, editingAppointment }) => {
     }
   }, [open]);
 
-const handleSubmit = () => {
-  form
-    .validateFields()
-    .then((values) => {
-      const payload = {
-        patient_id: values.patient_id,
-        doctor_id: values.doctor_id,
-        scheduled_at: values.scheduled_at.format('YYYY-MM-DD HH:mm:ss'),
-        notes: values.notes ?? '',
-      };
-      if (isEditing) {
-        updateAppointment({ id: editingAppointment.id, ...payload });
-      } else {
-        createAppointment(payload);
-      }
-    })
-    .catch((err) => {
-      console.warn('Validation error:', err);
-    });
-};
+  const handleSubmit = () => {
+    form
+      .validateFields()
+      .then((values) => {
+        const payload = {
+          patient_id: values.patient_id,
+          doctor_id: values.doctor_id,
+          scheduled_at: values.scheduled_at.format('YYYY-MM-DD HH:mm:ss'),
+          notes: values.notes ?? '',
+        };
+        if (isEditing) {
+          updateAppointment({ id: editingAppointment.id, ...payload });
+        } else {
+          createAppointment(payload);
+        }
+      })
+      .catch((err) => {
+        console.warn('Validation error:', err);
+      });
+  };
   const handleCancel = () => {
     form.resetFields();
     onClose();

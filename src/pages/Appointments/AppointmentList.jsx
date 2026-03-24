@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Pagination, Radio } from 'antd';
+import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Radio } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
@@ -22,7 +22,6 @@ import {
   FilterLabel,
   TableCard,
   StatusBadge,
-  PaginationWrapper,
   EmptyState,
 } from './AppointmentList.styles';
 
@@ -300,25 +299,25 @@ const AppointmentList = () => {
               columns={columns}
               rowKey="id"
               loading={loading}
-              pagination={false}
+              pagination={{
+                pageSize: 5,
+                showSizeChanger: false,
+                showTotal: (total) => `${total} appointments`,
+                itemRender: (current, type, originalElement) => {
+                  if (type === 'prev') {
+                    return <Button type="text" size="small">Prev</Button>;
+                  }
+                  if (type === 'next') {
+                    return <Button type="text" size="small">Next</Button>;
+                  }
+                  return originalElement;
+                },
+              }}
               locale={{
                 emptyText: <EmptyState>No appointments found.</EmptyState>,
               }}
               scroll={{ x: 800 }}
             />
-
-            {pagination.totalPages > 1 && (
-              <PaginationWrapper>
-                <Pagination
-                  current={pagination.currentPage}
-                  total={pagination.totalRecords}
-                  pageSize={pagination.perPage}
-                  onChange={goToPage}
-                  showSizeChanger={false}
-                  showTotal={(total) => `${total} appointments`}
-                />
-              </PaginationWrapper>
-            )}
           </TableCard>
         </>
       )}
