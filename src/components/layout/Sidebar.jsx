@@ -140,7 +140,7 @@ const Sidebar = () => {
         </NavItem>
       )}
 
-      {hasAccess(['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']) && (
+      {hasAccess(['Admin', 'Provider', 'Nurse', 'Pharmacist']) && (
         <NavItem to="/prescriptions" $collapsed={isCollapsed}>
           <NotebookIcon size={20} />
           <NavLabel $collapsed={isCollapsed}>Prescriptions</NavLabel>
