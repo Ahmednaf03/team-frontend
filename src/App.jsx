@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { Provider } from 'react-redux'; 
 import store from './app/store'; 
+import { Toaster } from 'react-hot-toast';
 
 import { getTenantSlug } from './utils/getTenantFromDomain';
 import axiosClient from './services/axiosClient';
@@ -113,6 +114,23 @@ const App = () => {
         pauseOnHover
       />
         </ErrorBoundary>
+        <Toaster                                   
+          position="top-right"
+          toastOptions={{
+            duration: 3500,
+            style: {
+              borderRadius: '10px',
+              fontFamily: 'DM Sans, Segoe UI, sans-serif',
+              fontSize: '14px',
+            },
+            success: {
+              style: { border: '1px solid #86efac' },
+            },
+            error: {
+              style: { border: '1px solid #fca5a5' },
+            },
+          }}
+        />
       </CustomThemeProvider>
     </Provider>
   );
