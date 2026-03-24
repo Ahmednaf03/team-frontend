@@ -348,7 +348,7 @@ const theme = useTheme();
             )}
 
             <div>
-              <LabelRow><Label htmlFor="username">Username</Label></LabelRow>
+              <LabelRow><Label htmlFor="username">Email</Label></LabelRow>
               <InputWrap>
                 <Input
                   ref={usernameRef}

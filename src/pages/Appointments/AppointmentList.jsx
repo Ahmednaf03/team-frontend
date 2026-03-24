@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Pagination, Radio } from 'antd';
+import { useSelector } from 'react-redux';
 import {
   PlusOutlined,
   EditOutlined,
   StopOutlined,
   DeleteOutlined,
   ReloadOutlined,
-  SearchOutlined,
   UnorderedListOutlined,
   CalendarOutlined,
 } from '@ant-design/icons';
@@ -14,6 +14,10 @@ import dayjs from 'dayjs';
 import useAppointments from '../../modules/appointments/hooks/useAppointments';
 import AppointmentFormModal from './AppointmentFormModal';
 import AppointmentCalendar from './AppointmentCalendar';
+import useAppointmentReferenceData from './useAppointmentReferenceData';
+import { enrichAppointment } from '../../utils/appointmentMapping';
+import { selectUserRole } from '../../modules/auth/selectors';
+import { getAppointmentRoleCapabilities } from './appointmentPermissions';
 import {
   PageWrapper,
   PageHeader,
@@ -31,6 +35,8 @@ const { RangePicker } = DatePicker;
 const { Search } = Input;
 
 const AppointmentList = () => {
+  const userRole = useSelector(selectUserRole);
+  const permissions = getAppointmentRoleCapabilities(userRole);
   const {
     appointments,
     pagination,
@@ -48,6 +54,7 @@ const AppointmentList = () => {
     goToPage,
     dismissMessages,
   } = useAppointments();
+  const { patientLookup, doctorLookup } = useAppointmentReferenceData();
 
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingAppointment, setEditingAppointment] = React.useState(null);
@@ -75,12 +82,14 @@ const AppointmentList = () => {
 
   // ── Modal helpers ─────────────────────────────────────────────────────────
   const openCreateModal = () => {
+    if (!permissions.canCreateAppointments) return;
     setEditingAppointment(null);
     selectAppointment(null);
     setModalOpen(true);
   };
 
   const openEditModal = (record) => {
+    if (!permissions.canUpdateAppointments) return;
     setEditingAppointment(record);
     selectAppointment(record);
     setModalOpen(true);
@@ -105,9 +114,20 @@ const AppointmentList = () => {
     applyFilters({ search: value });
   };
 
+  const displayAppointments = React.useMemo(
+    () =>
+      appointments.map((appointment) =>
+        enrichAppointment(appointment, {
+          patients: patientLookup,
+          doctors: doctorLookup,
+        })
+      ),
+    [appointments, patientLookup, doctorLookup]
+  );
+
   // Local filtering fallback in case backend only paginates without filtering
   const filteredAppointments = React.useMemo(() => {
-    return appointments.filter((appt) => {
+    return displayAppointments.filter((appt) => {
       let match = true;
       if (filters.status) {
         match = match && appt.status === filters.status;
@@ -126,7 +146,7 @@ const AppointmentList = () => {
       }
       return match;
     });
-  }, [appointments, filters]);
+  }, [displayAppointments, filters]);
 
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = [
@@ -168,24 +188,27 @@ const AppointmentList = () => {
       ellipsis: true,
       render: (notes) => notes ?? <span style={{ color: '#ccc' }}>—</span>,
     },
-    {
+    permissions.canUpdateAppointments ||
+    permissions.canCancelAppointments ||
+    permissions.canDeleteAppointments
+      ? {
       title: 'Actions',
       key: 'actions',
       width: 140,
       render: (_, record) => (
         <div style={{ display: 'flex', gap: 8 }}>
-          {/* Edit / Reschedule */}
-          <Tooltip title="Reschedule">
-            <Button
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openEditModal(record)}
-              disabled={record.status === 'cancelled'}
-            />
-          </Tooltip>
+          {permissions.canUpdateAppointments && (
+            <Tooltip title="Reschedule">
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openEditModal(record)}
+                disabled={record.status === 'cancelled'}
+              />
+            </Tooltip>
+          )}
 
-          {/* Cancel */}
-          {record.status === 'scheduled' && (
+          {permissions.canCancelAppointments && record.status === 'scheduled' && (
             <Tooltip title="Cancel">
               <Popconfirm
                 title="Cancel this appointment?"
@@ -198,22 +221,24 @@ const AppointmentList = () => {
             </Tooltip>
           )}
 
-          {/* Delete */}
-          <Tooltip title="Delete">
-            <Popconfirm
-              title="Permanently delete this appointment?"
-              okText="Delete"
-              okButtonProps={{ danger: true }}
-              cancelText="No"
-              onConfirm={() => deleteAppointment(record.id)}
-            >
-              <Button size="small" icon={<DeleteOutlined />} loading={actionLoading} />
-            </Popconfirm>
-          </Tooltip>
+          {permissions.canDeleteAppointments && (
+            <Tooltip title="Delete">
+              <Popconfirm
+                title="Permanently delete this appointment?"
+                okText="Delete"
+                okButtonProps={{ danger: true }}
+                cancelText="No"
+                onConfirm={() => deleteAppointment(record.id)}
+              >
+                <Button size="small" icon={<DeleteOutlined />} loading={actionLoading} />
+              </Popconfirm>
+            </Tooltip>
+          )}
         </div>
       ),
-    },
-  ];
+    }
+      : null,
+  ].filter(Boolean);
 
   return (
     <PageWrapper>
@@ -237,20 +262,21 @@ const AppointmentList = () => {
           </Radio.Group>
 
           {viewMode === 'list' && (
-            <>
-              <Button icon={<ReloadOutlined />} onClick={fetchAppointments} loading={loading}>
-                Refresh
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-                New Appointment
-              </Button>
-            </>
+            <Button icon={<ReloadOutlined />} onClick={fetchAppointments} loading={loading}>
+              Refresh
+            </Button>
+          )}
+
+          {permissions.canCreateAppointments && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+              New Appointment
+            </Button>
           )}
         </div>
       </PageHeader>
 
       {/* ── Calendar view ── */}
-      {viewMode === 'calendar' && <AppointmentCalendar />}
+      {viewMode === 'calendar' && <AppointmentCalendar showHeader={false} />}
 
       {/* ── List view ── */}
       {viewMode === 'list' && (

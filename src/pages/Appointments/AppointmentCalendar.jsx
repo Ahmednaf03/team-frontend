@@ -6,18 +6,18 @@ import {
   Tooltip,
   Tag,
   Spin,
-  Empty,
   message,
-  Radio,
+  Modal,
 } from 'antd';
 import {
   CalendarOutlined,
   ReloadOutlined,
-  CloseCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTheme } from 'styled-components';
 import useCalendar from '../../modules/calendar/hooks/useCalendar';
-import { DOCTOR_MAP } from '../../utils/appointmentMapping';
+import { enrichAppointment } from '../../utils/appointmentMapping';
+import useAppointmentReferenceData from './useAppointmentReferenceData';
 import {
   PageWrapper,
   PageHeader,
@@ -29,23 +29,20 @@ import {
   CalendarWrapper,
   EventPill,
   MorePill,
-  SidePanel,
-  SidePanelHeader,
-  SidePanelBody,
-  DetailCard,
-  DetailRow,
-  UpcomingItem,
   DropZone,
   ErrorBanner,
   ReschedulingOverlay,
+  DetailModalBody,
+  DetailGrid,
+  DetailItem,
+  DetailNote,
 } from './AppointmentCalendar.styles';
 
 const { Option } = Select;
 
-const AppointmentCalendar = () => {
+const AppointmentCalendar = ({ showHeader = true }) => {
   const {
     appointments,
-    selectedDate,
     selectedDoctor,
     loading,
     rescheduling,
@@ -57,6 +54,12 @@ const AppointmentCalendar = () => {
     changeDoctor,
     dismissMessages,
   } = useCalendar();
+  const theme = useTheme();
+  const {
+    doctors: doctorOptions,
+    patientLookup,
+    doctorLookup,
+  } = useAppointmentReferenceData();
 
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const dragRef = useRef(null); // stores { id, originalDate, originalTime }
@@ -75,31 +78,28 @@ const AppointmentCalendar = () => {
     if (error) { message.error(error); dismissMessages(); }
   }, [error, dismissMessages]);
 
+  const displayAppointments = React.useMemo(
+    () =>
+      appointments.map((appointment) =>
+        enrichAppointment(appointment, {
+          patients: patientLookup,
+          doctors: doctorLookup,
+        })
+      ),
+    [appointments, patientLookup, doctorLookup]
+  );
+
   // ── Group appointments by date ────────────────────────────────────────────
   const appointmentsByDate = React.useMemo(() => {
     const map = {};
-    appointments.forEach((appt) => {
+    displayAppointments.forEach((appt) => {
       if (!appt.scheduled_at) return;
       const key = dayjs(appt.scheduled_at).format('YYYY-MM-DD');
       if (!map[key]) map[key] = [];
       map[key].push(appt);
     });
     return map;
-  }, [appointments]);
-
-  // ── Upcoming appointments (next 7 days) ───────────────────────────────────
-  const upcoming = React.useMemo(() => {
-    const now = dayjs();
-    return appointments
-      .filter(
-        (a) =>
-          a.status === 'scheduled' &&
-          dayjs(a.scheduled_at).isAfter(now) &&
-          dayjs(a.scheduled_at).isBefore(now.add(7, 'day'))
-      )
-      .sort((a, b) => dayjs(a.scheduled_at).unix() - dayjs(b.scheduled_at).unix())
-      .slice(0, 8);
-  }, [appointments]);
+  }, [displayAppointments]);
 
   // ── Drag & Drop handlers ──────────────────────────────────────────────────
   const handleDragStart = useCallback((e, appt) => {
@@ -180,119 +180,23 @@ const AppointmentCalendar = () => {
     [appointmentsByDate, handleDragStart, handleDragOver, handleDrop, changeDate]
   );
 
-  // ── Doctor filter options ─────────────────────────────────────────────────
-  const doctorOptions = Object.entries(DOCTOR_MAP).map(([id, name]) => (
-    <Option key={id} value={Number(id)}>{name}</Option>
-  ));
-
-  // ── Side panel content ────────────────────────────────────────────────────
-  const renderSidePanel = () => {
-    if (selectedAppointment) {
-      return (
-        <SidePanel>
-          <SidePanelHeader>
-            Appointment details
-            <Button
-              type="text"
-              size="small"
-              icon={<CloseCircleOutlined />}
-              style={{ float: 'right', marginTop: -2 }}
-              onClick={() => setSelectedAppointment(null)}
-            />
-          </SidePanelHeader>
-          <DetailCard>
-            <DetailRow>
-              <span className="label">Patient</span>
-              <span className="value">{selectedAppointment.patient_name ?? '—'}</span>
-            </DetailRow>
-            <DetailRow>
-              <span className="label">Doctor</span>
-              <span className="value">{selectedAppointment.doctor_name ?? '—'}</span>
-            </DetailRow>
-            <DetailRow>
-              <span className="label">Scheduled</span>
-              <span className="value">
-                {dayjs(selectedAppointment.scheduled_at).format('DD MMM YYYY, hh:mm A')}
-              </span>
-            </DetailRow>
-            <DetailRow>
-              <span className="label">Status</span>
-              <span className="value">
-                <Tag
-                  color={
-                    selectedAppointment.status === 'scheduled'
-                      ? 'blue'
-                      : selectedAppointment.status === 'completed'
-                      ? 'green'
-                      : 'red'
-                  }
-                >
-                  {selectedAppointment.status}
-                </Tag>
-              </span>
-            </DetailRow>
-            {selectedAppointment.notes && (
-              <DetailRow>
-                <span className="label">Notes</span>
-                <span className="value">{selectedAppointment.notes}</span>
-              </DetailRow>
-            )}
-            {selectedAppointment.status === 'scheduled' && (
-              <div style={{ marginTop: 12, fontSize: 11, color: '#8c8c8c' }}>
-                Drag this appointment to another date to reschedule.
-              </div>
-            )}
-          </DetailCard>
-        </SidePanel>
-      );
-    }
-
-    return (
-      <SidePanel>
-        <SidePanelHeader>Upcoming (next 7 days)</SidePanelHeader>
-        <SidePanelBody>
-          {loading ? (
-            <Spin size="small" />
-          ) : upcoming.length === 0 ? (
-            <Empty
-              description="No upcoming appointments"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
-          ) : (
-            upcoming.map((appt) => (
-              <UpcomingItem
-                key={appt.id}
-                onClick={() => setSelectedAppointment(appt)}
-              >
-                <div className="name">{appt.patient_name ?? '—'}</div>
-                <div className="meta">
-                  {dayjs(appt.scheduled_at).format('DD MMM, hh:mm A')} ·{' '}
-                  {appt.doctor_name ?? '—'}
-                </div>
-              </UpcomingItem>
-            ))
-          )}
-        </SidePanelBody>
-      </SidePanel>
-    );
-  };
-
   return (
-    <PageWrapper>
-      {/* ── Header ── */}
-      <PageHeader>
-        <PageTitle>
-          <CalendarOutlined />
-          Appointment Calendar
-        </PageTitle>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={fetchCalendarData}
-          loading={loading}
-        >
-          Refresh
-        </Button>
-      </PageHeader>
+    <PageWrapper $compact={!showHeader}>
+      {showHeader && (
+        <PageHeader>
+          <PageTitle>
+            <CalendarOutlined />
+            Appointment Calendar
+          </PageTitle>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchCalendarData}
+            loading={loading}
+          >
+            Refresh
+          </Button>
+        </PageHeader>
+      )}
 
       {/* ── Error banner with retry ── */}
       {error && (
@@ -314,7 +218,9 @@ const AppointmentCalendar = () => {
           value={selectedDoctor ?? undefined}
           onChange={(val) => changeDoctor(val ?? null)}
         >
-          {doctorOptions}
+          {doctorOptions.map(({ value, label }) => (
+            <Option key={value} value={value}>{label}</Option>
+          ))}
         </Select>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -324,10 +230,16 @@ const AppointmentCalendar = () => {
               Rescheduling...
             </span>
           )}
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchCalendarData}
+            loading={loading}
+          >
+            Refresh
+          </Button>
         </div>
       </ToolbarRow>
 
-      {/* ── Calendar + side panel ── */}
       <CalendarLayout>
         <CalendarWrapper>
           {rescheduling && (
@@ -344,9 +256,85 @@ const AppointmentCalendar = () => {
             </Spin>
           </CalendarCard>
         </CalendarWrapper>
-
-        {renderSidePanel()}
       </CalendarLayout>
+
+      <Modal
+        open={!!selectedAppointment}
+        onCancel={() => setSelectedAppointment(null)}
+        footer={null}
+        centered
+        width={520}
+        title="Appointment details"
+        styles={{
+          content: {
+            background: theme.colors.surface,
+            border: `1px solid ${theme.colors.border}`,
+            boxShadow: '0 18px 50px rgba(15, 23, 42, 0.12)',
+          },
+          header: {
+            background: theme.colors.surface,
+            borderBottom: `1px solid ${theme.colors.border}`,
+            marginBottom: 0,
+            paddingBottom: 14,
+          },
+          body: {
+            paddingTop: 18,
+          },
+        }}
+      >
+        {selectedAppointment && (
+          <DetailModalBody>
+            <DetailGrid>
+              <DetailItem>
+                <span className="label">Patient</span>
+                <span className="value">{selectedAppointment.patient_name ?? '—'}</span>
+              </DetailItem>
+
+              <DetailItem>
+                <span className="label">Doctor</span>
+                <span className="value">{selectedAppointment.doctor_name ?? '—'}</span>
+              </DetailItem>
+
+              <DetailItem>
+                <span className="label">Scheduled</span>
+                <span className="value">
+                  {selectedAppointment.scheduled_at
+                    ? dayjs(selectedAppointment.scheduled_at).format('DD MMM YYYY, hh:mm A')
+                    : '—'}
+                </span>
+              </DetailItem>
+
+              <DetailItem>
+                <span className="label">Status</span>
+                <span className="value">
+                  <Tag
+                    color={
+                      selectedAppointment.status === 'scheduled'
+                        ? 'blue'
+                        : selectedAppointment.status === 'completed'
+                        ? 'green'
+                        : 'red'
+                    }
+                  >
+                    {selectedAppointment.status ?? '—'}
+                  </Tag>
+                </span>
+              </DetailItem>
+            </DetailGrid>
+
+            <DetailNote>
+              <span className="label">Notes</span>
+              <span className="value">{selectedAppointment.notes?.trim() || 'No notes added.'}</span>
+            </DetailNote>
+
+            {selectedAppointment.status === 'scheduled' && (
+              <div style={{ fontSize: 12, color: theme.colors.textSecondary }}>
+                Drag this appointment to another date in the calendar to reschedule it.
+              </div>
+            )}
+          </DetailModalBody>
+        )}
+      </Modal>
     </PageWrapper>
   );
 };

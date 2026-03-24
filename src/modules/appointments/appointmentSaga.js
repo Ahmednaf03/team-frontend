@@ -8,7 +8,7 @@ import {
   cancelAppointmentAPI,
   deleteAppointmentAPI,
 } from './appointmentAPI';
-import { enrichAppointment } from '../../utils/appointmentMapping';
+import { enrichAppointment, extractCollection, unwrapAppointment } from '../../utils/appointmentMapping';
 import {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
@@ -53,7 +53,9 @@ function* handleFetchAppointments() {
     console.log('API Response:', responseData);
 
     // Backend returns: { data: [...], pagination: { currentPage, totalPages, ... } }
-    const enrichedData = (responseData.data ?? responseData).map(enrichAppointment);
+    const enrichedData = extractCollection(responseData).map((appointment) =>
+      enrichAppointment(appointment)
+    );
 
     yield put(
       fetchAppointmentsSuccess({
@@ -75,7 +77,7 @@ function* handleFetchAppointments() {
 function* handleFetchUpcoming() {
   try {
     const responseData = yield call(fetchUpcomingAppointmentsAPI);
-    const data = responseData.data ?? responseData;
+    const data = extractCollection(responseData);
     const enrichedData = Array.isArray(data) ? data.map(enrichAppointment) : data;
     yield put(fetchUpcomingSuccess(enrichedData));
   } catch (error) {
@@ -89,7 +91,7 @@ function* handleFetchUpcoming() {
 function* handleFetchAppointmentById(action) {
   try {
     const responseData = yield call(fetchAppointmentByIdAPI, action.payload);
-    const data = responseData.data ?? responseData;
+    const data = unwrapAppointment(responseData);
     yield put(fetchAppointmentByIdSuccess(enrichAppointment(data)));
   } catch (error) {
     const message =
@@ -102,8 +104,10 @@ function* handleFetchAppointmentById(action) {
 function* handleCreateAppointment(action) {
   try {
     const responseData = yield call(createAppointmentAPI, action.payload);
-    const data = responseData.data ?? responseData;
+    const data = unwrapAppointment(responseData);
     yield put(createAppointmentSuccess(enrichAppointment(data)));
+    yield put(fetchAppointmentsRequest());
+    yield put(fetchUpcomingRequest());
   } catch (error) {
     const message =
       error.response?.data?.message ||
