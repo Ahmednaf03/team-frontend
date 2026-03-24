@@ -36,7 +36,6 @@ axiosClient.interceptors.request.use((config) => {
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
     }
-
     console.log("csrf token attached ", config.headers['X-CSRF-Token']);
     
   }

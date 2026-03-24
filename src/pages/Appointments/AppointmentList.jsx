@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
-import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Pagination, Radio } from 'antd';
-import { useSelector } from 'react-redux';
+import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Pagination, Radio, Modal, Spin, Empty, Alert } from 'antd';
+import { useDispatch, useSelector } from 'react-redux';
 import {
   PlusOutlined,
   EditOutlined,
@@ -16,8 +16,15 @@ import AppointmentFormModal from './AppointmentFormModal';
 import AppointmentCalendar from './AppointmentCalendar';
 import useAppointmentReferenceData from './useAppointmentReferenceData';
 import { enrichAppointment } from '../../utils/appointmentMapping';
-import { selectUserRole } from '../../modules/auth/selectors';
+import { selectUser, selectUserRole } from '../../modules/auth/selectors';
 import { getAppointmentRoleCapabilities } from './appointmentPermissions';
+import {
+  clearChatMessages,
+  clearChatState,
+  fetchChatThreadRequest,
+  sendChatMessageRequest,
+  updateChatMessageRequest,
+} from '../../modules/chat/chatSlice';
 import {
   PageWrapper,
   PageHeader,
@@ -33,9 +40,357 @@ import {
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 const { Search } = Input;
+const { TextArea } = Input;
+
+const glyphStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const ChatGlyph = () => (
+  <span style={glyphStyle} aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M7 18.5H5a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-8l-4 3v-3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.5 10h7M8.5 14h5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  </span>
+);
+
+const SendGlyph = () => (
+  <span style={glyphStyle} aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M21 3 10 14"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m21 3-7 18-4-7-7-4 18-7Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </span>
+);
+
+const roleLabel = (role) => {
+  const normalized = String(role || '').toLowerCase();
+  if (!normalized) return '';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+function AppointmentChatInlineModal({
+  open,
+  onClose,
+  appointment,
+  staffMembers,
+  currentUser,
+  chatState,
+  dispatch,
+}) {
+  const [draft, setDraft] = React.useState('');
+  const [editingMessageId, setEditingMessageId] = React.useState(null);
+  const [editingText, setEditingText] = React.useState('');
+
+  const senderLookup = React.useMemo(
+    () =>
+      new Map(
+        (Array.isArray(staffMembers) ? staffMembers : [])
+          .filter((item) => item?.id)
+          .map((item) => [
+            Number(item.id),
+            {
+              name: item.name || item.email || `User #${item.id}`,
+              role: item.role || '',
+            },
+          ])
+      ),
+    [staffMembers]
+  );
+
+  React.useEffect(() => {
+    if (open && appointment?.id) {
+      dispatch(fetchChatThreadRequest(appointment.id));
+    }
+    if (!open) {
+      setDraft('');
+      setEditingMessageId(null);
+      setEditingText('');
+      dispatch(clearChatState());
+    }
+  }, [appointment?.id, dispatch, open]);
+
+  React.useEffect(() => {
+    if (chatState.success) {
+      message.success(chatState.success);
+      dispatch(clearChatMessages());
+      setDraft('');
+      setEditingMessageId(null);
+      setEditingText('');
+    }
+  }, [chatState.success, dispatch]);
+
+  React.useEffect(() => {
+    if (chatState.error) {
+      message.error(chatState.error);
+      dispatch(clearChatMessages());
+    }
+  }, [chatState.error, dispatch]);
+
+  const resolvedMessages = React.useMemo(
+    () =>
+      (Array.isArray(chatState.messages) ? chatState.messages : []).map((item) => {
+        const senderId = Number(item.sender_id);
+        const isCurrentUser = Number(currentUser?.id) === senderId;
+        const sender = senderLookup.get(senderId);
+
+        return {
+          ...item,
+          senderName: isCurrentUser ? 'You' : sender?.name || `User #${senderId}`,
+          senderRole: isCurrentUser ? roleLabel(currentUser?.role) : roleLabel(sender?.role),
+          isCurrentUser,
+        };
+      }),
+    [chatState.messages, currentUser?.id, currentUser?.role, senderLookup]
+  );
+
+  const handleSend = () => {
+    const trimmed = draft.trim();
+    if (!trimmed || !appointment?.id) return;
+    setDraft('');
+    dispatch(sendChatMessageRequest({ appointmentId: appointment.id, message: trimmed }));
+  };
+
+  const startEditing = (item) => {
+    setEditingMessageId(item.id);
+    setEditingText(item.message || '');
+  };
+
+  const cancelEditing = () => {
+    setEditingMessageId(null);
+    setEditingText('');
+  };
+
+  const handleUpdate = () => {
+    const trimmed = editingText.trim();
+    if (!trimmed || !appointment?.id || !editingMessageId) return;
+    dispatch(
+      updateChatMessageRequest({
+        appointmentId: appointment.id,
+        messageId: editingMessageId,
+        message: trimmed,
+      })
+    );
+  };
+
+  return (
+    <Modal
+      title="Appointment Communication"
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      width={760}
+      destroyOnHidden
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            display: 'grid',
+            gap: 8,
+            padding: '14px 16px',
+            border: '1px solid #e5e7eb',
+            borderRadius: 14,
+            background: '#fff',
+          }}
+        >
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 13 }}>
+            <strong>{appointment?.patient_name || 'Unknown patient'}</strong>
+            <span>with</span>
+            <strong>{appointment?.doctor_name || 'Unknown doctor'}</strong>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', color: '#667085', fontSize: 13 }}>
+            <span>Scheduled:</span>
+            <strong style={{ color: '#111827' }}>
+              {appointment?.scheduled_at
+                ? dayjs(appointment.scheduled_at).format('DD MMM YYYY, hh:mm A')
+                : 'Schedule pending'}
+            </strong>
+          </div>
+        </div>
+
+        {chatState.loading ? (
+          <div style={{ display: 'grid', placeItems: 'center', minHeight: 280 }}>
+            <Spin size="large" />
+          </div>
+        ) : (
+          <div
+            style={{
+              minHeight: 360,
+              maxHeight: '48vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              padding: '4px 2px',
+            }}
+          >
+            {resolvedMessages.length > 0 ? (
+              resolvedMessages.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: item.isCurrentUser ? 'flex-end' : 'flex-start',
+                  }}
+                >
+                  <div
+                    style={{
+                      maxWidth: '78%',
+                      borderRadius: 18,
+                      padding: '12px 14px',
+                      background: item.isCurrentUser ? '#1a73c1' : '#fff',
+                      color: item.isCurrentUser ? '#fff' : 'inherit',
+                      border: item.isCurrentUser ? '1px solid transparent' : '1px solid #e5e7eb',
+                      boxShadow: item.isCurrentUser ? '0 10px 20px rgba(26, 115, 193, 0.18)' : 'none',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        marginBottom: 6,
+                        fontSize: 12,
+                        opacity: 0.82,
+                      }}
+                    >
+                      <strong>{item.senderName}</strong>
+                      {item.senderRole ? <span>{item.senderRole}</span> : null}
+                      <span>{dayjs(item.created_at).format('DD MMM, hh:mm A')}</span>
+                      {item.isCurrentUser ? (
+                        <button
+                          type="button"
+                          onClick={() => startEditing(item)}
+                          style={{
+                            marginLeft: 'auto',
+                            background: 'transparent',
+                            border: 'none',
+                            color: item.isCurrentUser ? '#fff' : '#1a73c1',
+                            cursor: 'pointer',
+                            padding: 0,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          aria-label="Edit message"
+                          title="Edit message"
+                        >
+                          <EditOutlined />
+                        </button>
+                      ) : null}
+                    </div>
+                    {editingMessageId === item.id ? (
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        <TextArea
+                          value={editingText}
+                          onChange={(event) => setEditingText(event.target.value)}
+                          rows={3}
+                          maxLength={1000}
+                          disabled={chatState.updating}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                          <Button size="small" onClick={cancelEditing} disabled={chatState.updating}>
+                            Cancel
+                          </Button>
+                          <Button
+                            size="small"
+                            type="primary"
+                            onClick={handleUpdate}
+                            loading={chatState.updating}
+                            disabled={!editingText.trim()}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, fontSize: 14 }}>
+                        {item.message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="No communication yet for this appointment."
+              />
+            )}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gap: 10, paddingTop: 8 }}>
+          <TextArea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            rows={4}
+            placeholder="Add an internal note for this appointment..."
+            maxLength={1000}
+            disabled={chatState.sending}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ color: '#8c8c8c', fontSize: 12 }}>
+              Doctor and nurse notes remain visible as chat history for this appointment.
+            </span>
+            <Button
+              type="primary"
+              onClick={handleSend}
+              loading={chatState.sending}
+              disabled={!draft.trim()}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <SendGlyph />
+                <span>Send</span>
+              </span>
+            </Button>
+          </div>
+          {chatState.error ? (
+            <Alert
+              type="error"
+              title="Unable to update communication."
+              description={chatState.error}
+              showIcon
+            />
+          ) : null}
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 const AppointmentList = () => {
+  const dispatch = useDispatch();
   const userRole = useSelector(selectUserRole);
+  const currentUser = useSelector(selectUser);
+  const chatState = useSelector((state) => state.chat);
   const permissions = getAppointmentRoleCapabilities(userRole);
   const {
     appointments,
@@ -54,11 +409,14 @@ const AppointmentList = () => {
     goToPage,
     dismissMessages,
   } = useAppointments();
-  const { patientLookup, doctorLookup } = useAppointmentReferenceData();
+  const { patientLookup, doctorLookup, staffMembers } = useAppointmentReferenceData();
 
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editingAppointment, setEditingAppointment] = React.useState(null);
   const [viewMode, setViewMode] = React.useState('list'); // 'list' | 'calendar'
+  const [chatOpen, setChatOpen] = React.useState(false);
+  const [chatAppointment, setChatAppointment] = React.useState(null);
+  const canUseInternalChat = ['provider', 'nurse'].includes(String(userRole || '').toLowerCase());
 
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -98,6 +456,17 @@ const AppointmentList = () => {
   const closeModal = () => {
     setModalOpen(false);
     setEditingAppointment(null);
+  };
+
+  const openChatModal = (record) => {
+    if (!canUseInternalChat) return;
+    setChatAppointment(record);
+    setChatOpen(true);
+  };
+
+  const closeChatModal = () => {
+    setChatOpen(false);
+    setChatAppointment(null);
   };
 
   // ── Filter handlers ───────────────────────────────────────────────────────
@@ -179,7 +548,7 @@ const AppointmentList = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => <StatusBadge status={status}>{status}</StatusBadge>,
+      render: (status) => <StatusBadge $status={status}>{status}</StatusBadge>,
     },
     {
       title: 'Notes',
@@ -188,6 +557,7 @@ const AppointmentList = () => {
       ellipsis: true,
       render: (notes) => notes ?? <span style={{ color: '#ccc' }}>—</span>,
     },
+    canUseInternalChat ||
     permissions.canUpdateAppointments ||
     permissions.canCancelAppointments ||
     permissions.canDeleteAppointments
@@ -197,6 +567,17 @@ const AppointmentList = () => {
       width: 140,
       render: (_, record) => (
         <div style={{ display: 'flex', gap: 8 }}>
+          {canUseInternalChat && (
+            <Tooltip title="Internal communication">
+              <Button
+                size="small"
+                onClick={() => openChatModal(record)}
+              >
+                <ChatGlyph />
+              </Button>
+            </Tooltip>
+          )}
+
           {permissions.canUpdateAppointments && (
             <Tooltip title="Reschedule">
               <Button
@@ -354,6 +735,15 @@ const AppointmentList = () => {
         open={modalOpen}
         onClose={closeModal}
         editingAppointment={editingAppointment}
+      />
+      <AppointmentChatInlineModal
+        open={chatOpen}
+        onClose={closeChatModal}
+        appointment={chatAppointment}
+        staffMembers={staffMembers}
+        currentUser={currentUser}
+        chatState={chatState}
+        dispatch={dispatch}
       />
     </PageWrapper>
   );

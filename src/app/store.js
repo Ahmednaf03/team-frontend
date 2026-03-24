@@ -4,6 +4,7 @@ import appointmentReducer from '../modules/appointments/appointmentSlice';
 import authReducer from '../modules/auth/authSlice';
 import rootSaga from './rootSaga';
 import calendarReducer from '../modules/calendar/calendarSlice';
+import chatReducer from '../modules/chat/chatSlice';
 
 const sagaMiddleware = createSagaMiddleware();
 
@@ -12,6 +13,7 @@ const store = configureStore({
     auth: authReducer,
     appointments: appointmentReducer,
     calendar: calendarReducer,
+    chat: chatReducer,
     // Future modules plug in here:
     // tenant:       tenantReducer,
     // patients:     patientReducer,

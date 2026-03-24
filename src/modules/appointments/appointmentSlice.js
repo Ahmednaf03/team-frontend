@@ -173,6 +173,27 @@ const appointmentSlice = createSlice({
       state.error = null;
       state.success = null;
     },
+    updateAppointmentNotesPreview: (state, action) => {
+      const { appointmentId, notes } = action.payload;
+      state.list = state.list.map((appointment) =>
+        appointment.id === appointmentId
+          ? { ...appointment, notes }
+          : appointment
+      );
+
+      if (state.selected?.id === appointmentId) {
+        state.selected = {
+          ...state.selected,
+          notes,
+        };
+      }
+
+      state.upcoming = state.upcoming.map((appointment) =>
+        appointment.id === appointmentId
+          ? { ...appointment, notes }
+          : appointment
+      );
+    },
   },
 });
 
@@ -203,6 +224,7 @@ export const {
   clearFilters,
   setPage,
   clearMessages,
+  updateAppointmentNotesPreview,
 } = appointmentSlice.actions;
 
 export default appointmentSlice.reducer;

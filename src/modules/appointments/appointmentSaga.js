@@ -1,4 +1,4 @@
-import { call, put, takeLatest, select } from 'redux-saga/effects';
+import { all, call, put, takeLatest, select } from 'redux-saga/effects';
 import {
   fetchAppointmentsAPI,
   fetchAppointmentByIdAPI,
@@ -9,6 +9,7 @@ import {
   deleteAppointmentAPI,
 } from './appointmentAPI';
 import { enrichAppointment, extractCollection, unwrapAppointment } from '../../utils/appointmentMapping';
+import { fetchAppointmentMessagesAPI } from '../chat/chatAPI';
 import {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
@@ -33,6 +34,25 @@ import {
   deleteAppointmentFailure,
 } from './appointmentSlice';
 
+const extractMessages = (payload) => {
+  const data = payload?.data ?? payload;
+  return Array.isArray(data) ? data : [];
+};
+
+const resolveLatestThreadNote = async (appointment) => {
+  try {
+    const response = await fetchAppointmentMessagesAPI(appointment.id);
+    const messages = extractMessages(response);
+    const latestMessage = messages[messages.length - 1];
+
+    return latestMessage?.message
+      ? { appointmentId: appointment.id, notes: latestMessage.message }
+      : null;
+  } catch (error) {
+    return null;
+  }
+};
+
 // ── Fetch all appointments (with current filters + pagination) ─────────────────
 function* handleFetchAppointments() {
   try {
@@ -56,10 +76,24 @@ function* handleFetchAppointments() {
     const enrichedData = extractCollection(responseData).map((appointment) =>
       enrichAppointment(appointment)
     );
+    const latestNotesByAppointment = yield all(
+      enrichedData.map((appointment) => call(resolveLatestThreadNote, appointment))
+    );
+    const latestNotesMap = latestNotesByAppointment.reduce((acc, entry) => {
+      if (entry?.appointmentId && typeof entry.notes === 'string') {
+        acc[entry.appointmentId] = entry.notes;
+      }
+      return acc;
+    }, {});
+    const hydratedData = enrichedData.map((appointment) =>
+      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
+        ? { ...appointment, notes: latestNotesMap[appointment.id] }
+        : appointment
+    );
 
     yield put(
       fetchAppointmentsSuccess({
-        data: enrichedData,
+        data: hydratedData,
         pagination: responseData.pagination ?? null,
       })
     );

@@ -8,6 +8,45 @@ import {
 } from 'lucide-react';
 import logoImg from '../../assets/images/health.png';
 
+const formatTenantSlug = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  return value
+    .split(/[-_.]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const resolveTenantDisplayName = (tenantConfig) => {
+  if (!tenantConfig) return null;
+
+  const candidates = [
+    tenantConfig?.data?.name,
+    tenantConfig?.data?.tenant_name,
+    tenantConfig?.data?.hospital_name,
+    tenantConfig?.name,
+    tenantConfig?.tenant_name,
+    tenantConfig?.hospital_name,
+    tenantConfig?.tenant?.name,
+    tenantConfig?.tenant?.tenant_name,
+    tenantConfig?.tenant?.hospital_name,
+    formatTenantSlug(tenantConfig?.slug),
+    formatTenantSlug(tenantConfig?.tenant_slug),
+  ];
+
+  const directMatch = candidates.find(
+    (candidate) => typeof candidate === 'string' && candidate.trim()
+  );
+  if (directMatch) return directMatch.trim();
+
+  if (typeof window !== 'undefined') {
+    const [subdomain] = window.location.hostname.split('.');
+    return formatTenantSlug(subdomain);
+  }
+
+  return null;
+};
+
 /* ─── Animations ──────────────────────────────────────────────────────────── */
 const fadeUp = keyframes`
   from { opacity: 0; transform: translateY(18px); }
@@ -290,7 +329,7 @@ const FeatureDesc = styled.p`
 `;
 
 /* ─── Component ─────────────────────────────────────────────────────────── */
-export default function LoginPage() {
+export default function LoginPage({ tenantConfig }) {
   const navigate = useNavigate();
   const { login, loading, error, isLoggedIn, dismissError } = useAuth();
 
@@ -299,6 +338,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
 const theme = useTheme(); 
   const usernameRef = useRef(null);
+  const tenantDisplayName = resolveTenantDisplayName(tenantConfig);
+  const formTitle = tenantDisplayName
+    ? `Welcome back`
+    : 'Welcome Back';
+  const formSubtitle = tenantDisplayName
+    ? `Sign in to continue to ${tenantDisplayName}.`
+    : 'Sign in to your hospital workspace.';
 
   useEffect(() => {
     if (isLoggedIn) navigate('/dashboard', { replace: true });
@@ -334,8 +380,8 @@ const theme = useTheme();
           </BrandContainer>
 
           <FormHeader>
-            <FormTitle>Welcome Back</FormTitle>
-            <FormSubtitle>Sign in to your hospital workspace.</FormSubtitle>
+            <FormTitle>{formTitle}</FormTitle>
+            <FormSubtitle>{formSubtitle}</FormSubtitle>
           </FormHeader>
 
           <Form onSubmit={handleSubmit} noValidate>

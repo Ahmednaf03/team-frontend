@@ -84,6 +84,7 @@ export default function useAppointmentReferenceData() {
   );
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [staffMembers, setStaffMembers] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -115,6 +116,7 @@ export default function useAppointmentReferenceData() {
         if (!isMounted) return;
 
         setPatients(normalizePatientRecords(patientRecords));
+        setStaffMembers(Array.isArray(doctorRecords) ? doctorRecords : []);
         setDoctors(normalizeDoctorRecords(doctorRecords));
       } finally {
         if (isMounted) {
@@ -140,11 +142,26 @@ export default function useAppointmentReferenceData() {
     [doctors]
   );
 
+  const staffLookup = useMemo(
+    () =>
+      buildLookupMap(
+        staffMembers
+          .map((item) => ({
+            id: item?.id,
+            name: getDisplayName(item),
+          }))
+          .filter((item) => item.id && item.name)
+      ),
+    [staffMembers]
+  );
+
   return {
     patients,
     doctors,
+    staffMembers,
     patientLookup,
     doctorLookup,
+    staffLookup,
     loading,
     capabilities,
   };
