@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const currentHostname = window.location.hostname; 
-const dynamicBaseUrl = `http://${currentHostname}/PHPTasks/team-backend/api`; //cors
+const dynamicBaseUrl = `http://${currentHostname}/api`; //cors
 
 const axiosClient = axios.create({
   baseURL: dynamicBaseUrl,
