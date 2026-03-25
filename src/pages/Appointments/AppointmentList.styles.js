@@ -65,8 +65,8 @@ export const StatusBadge = styled.span`
   font-size: 12px;
   font-weight: 500;
   text-transform: capitalize;
-  background: ${({ status }) => statusColorMap[status]?.bg ?? '#f0f0f0'};
-  color: ${({ status }) => statusColorMap[status]?.text ?? '#555'};
+  background: ${({ $status }) => statusColorMap[$status]?.bg ?? '#f0f0f0'};
+  color: ${({ $status }) => statusColorMap[$status]?.text ?? '#555'};
 `;
 
 // ── Pagination wrapper ────────────────────────────────────────────────────────
