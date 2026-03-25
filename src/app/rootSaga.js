@@ -7,6 +7,7 @@ import patientSaga from '../modules/patients/patientSaga';
 import prescriptionSaga from '../modules/prescriptions/prescriptionSaga';
 import billingSaga from '../modules/billing/billingSaga';
 import staffSaga from '../modules/staff/staffSaga'; 
+import notificationSaga from '../modules/notifications/notificationSaga';
 export default function* rootSaga() {
   yield all([
     authSaga(),
@@ -17,10 +18,6 @@ export default function* rootSaga() {
     prescriptionSaga(),
     billingSaga(),
     staffSaga(), 
-    // Future sagas plug in here:
-    // tenantSaga(),
-    // patientSaga(),
-
-    // notificationSaga(),
+    notificationSaga(),
   ]);
 } 

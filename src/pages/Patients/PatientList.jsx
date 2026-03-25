@@ -4,6 +4,18 @@ import { Modal, Tooltip, Popconfirm, Tag, Badge } from 'antd';
 import { toast } from 'react-hot-toast';
 import usePatients from '../../modules/patients/hooks/usePatients';
 import useAuth from '../../modules/auth/hooks/useAuth';
+import {
+  Building2,
+  Plus,
+  Search,
+  Stethoscope,
+  Eye,
+  Pencil,
+  Trash2,
+  UserRound,
+  LoaderCircle,
+  Save,
+} from 'lucide-react';
 
 // ─── Animations ─────────────────────────────────────────────────────────────
 
@@ -147,6 +159,12 @@ const SearchIcon = styled.span`
   color: ${({ theme }) => theme.colors.textSecondary};
   pointer-events: none;
   font-size: 15px;
+`;
+
+const InlineIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const StatBadge = styled.div`
@@ -705,7 +723,7 @@ const PatientList = () => {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader>
         <HeaderLeft>
-          <PageIcon>🏥</PageIcon>
+          <PageIcon><Building2 size={20} /></PageIcon>
           <div>
             <PageTitle>Patient Management</PageTitle>
             <PageSubtitle>Manage all registered patients</PageSubtitle>
@@ -713,7 +731,7 @@ const PatientList = () => {
         </HeaderLeft>
         {isAdmin && (
           <AddButton onClick={openCreate} disabled={submitting}>
-            <span>＋</span> Add Patient
+            <Plus size={16} /> Add Patient
           </AddButton>
         )}
       </PageHeader>
@@ -721,7 +739,7 @@ const PatientList = () => {
       {/* ── Toolbar ────────────────────────────────────────────────────── */}
       <Toolbar>
         <SearchWrap>
-          <SearchIcon>🔍</SearchIcon>
+          <SearchIcon><Search size={15} /></SearchIcon>
           <SearchInput
             ref={searchRef}
             placeholder="Search by name, phone, diagnosis, gender…"
@@ -755,7 +773,7 @@ const PatientList = () => {
               <tr>
                 <td colSpan={7}>
                   <EmptyState>
-                    <EmptyIcon>🩺</EmptyIcon>
+                    <EmptyIcon><Stethoscope size={48} /></EmptyIcon>
                     <EmptyTitle>
                       {searchQuery ? 'No patients match your search' : 'No patients yet'}
                     </EmptyTitle>
@@ -805,12 +823,16 @@ const PatientList = () => {
                   <Td onClick={(e) => e.stopPropagation()}>
                     <Actions>
                       <Tooltip title="View details" placement="top">
-                        <ActionBtn $variant="view" onClick={() => openView(patient)}>👁</ActionBtn>
+                        <ActionBtn $variant="view" onClick={() => openView(patient)}>
+                          <Eye size={15} />
+                        </ActionBtn>
                       </Tooltip>
                       {isAdmin && (
                         <>
                           <Tooltip title="Edit patient" placement="top">
-                            <ActionBtn $variant="edit" onClick={(e) => openEdit(e, patient)}>✏️</ActionBtn>
+                            <ActionBtn $variant="edit" onClick={(e) => openEdit(e, patient)}>
+                              <Pencil size={15} />
+                            </ActionBtn>
                           </Tooltip>
                           <Popconfirm
                             title="Delete this patient?"
@@ -820,7 +842,9 @@ const PatientList = () => {
                             cancelText="Cancel"
                             okButtonProps={{ danger: true }}
                           >
-                            <ActionBtn $variant="delete" onClick={(e) => e.stopPropagation()}>🗑️</ActionBtn>
+                            <ActionBtn $variant="delete" onClick={(e) => e.stopPropagation()}>
+                              <Trash2 size={15} />
+                            </ActionBtn>
                           </Popconfirm>
                         </>
                       )}
@@ -859,7 +883,10 @@ const PatientList = () => {
         onCancel={closeModal}
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-            <span>{modalMode === 'create' ? '🆕 Add New Patient' : '✏️ Edit Patient'}</span>
+            <InlineIcon>
+              {modalMode === 'create' ? <Plus size={16} /> : <Pencil size={16} />}
+            </InlineIcon>
+            <span>{modalMode === 'create' ? 'Add New Patient' : 'Edit Patient'}</span>
           </div>
         }
         footer={null}
@@ -969,9 +996,12 @@ const PatientList = () => {
               }}
             >
               {submitting ? (
-                <><PulsingSpan>⏳</PulsingSpan> Saving…</>
+                <><PulsingSpan><LoaderCircle size={14} /></PulsingSpan> Saving…</>
               ) : (
-                modalMode === 'create' ? '＋ Add Patient' : '✅ Save Changes'
+                <>
+                  {modalMode === 'create' ? <Plus size={14} /> : <Save size={14} />}
+                  {modalMode === 'create' ? 'Add Patient' : 'Save Changes'}
+                </>
               )}
             </button>
           </div>
@@ -984,7 +1014,8 @@ const PatientList = () => {
         onCancel={closeModal}
         title={
           <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-            👤 Patient Details
+            <UserRound size={16} />
+            <span>Patient Details</span>
           </div>
         }
         footer={
@@ -998,7 +1029,10 @@ const PatientList = () => {
                   color: '#d97706', cursor: 'pointer', fontWeight: 600, fontSize: 13,
                 }}
               >
-                ✏️ Edit
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Pencil size={14} />
+                  <span>Edit</span>
+                </span>
               </button>
               <Popconfirm
                 title="Delete this patient?"
@@ -1014,7 +1048,10 @@ const PatientList = () => {
                     color: '#ef4444', cursor: 'pointer', fontWeight: 600, fontSize: 13,
                   }}
                 >
-                  🗑️ Delete
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Trash2 size={14} />
+                    <span>Delete</span>
+                  </span>
                 </button>
               </Popconfirm>
             </div>
