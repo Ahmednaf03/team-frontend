@@ -19,6 +19,7 @@ import {
   fetchAppointmentsRequest,
   updateAppointmentNotesPreview,
 } from '../appointments/appointmentSlice';
+import { updateCalendarNotesPreview } from '../calendar/calendarSlice';
 
 const extractMessages = (response) => {
   const payload = response?.data ?? response;
@@ -39,6 +40,7 @@ function* handleFetchThread(action) {
       })
     );
     yield put(updateAppointmentNotesPreview({ appointmentId, notes: latestMessage }));
+    yield put(updateCalendarNotesPreview({ appointmentId, notes: latestMessage }));
   } catch (error) {
     const message =
       error?.response?.data?.message ||

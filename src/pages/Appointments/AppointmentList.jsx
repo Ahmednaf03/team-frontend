@@ -5,10 +5,12 @@ import {
   PlusOutlined,
   EditOutlined,
   StopOutlined,
+  CheckOutlined,
   DeleteOutlined,
   ReloadOutlined,
   UnorderedListOutlined,
   CalendarOutlined,
+  MoreOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import useAppointments from '../../modules/appointments/hooks/useAppointments';
@@ -401,6 +403,7 @@ const AppointmentList = () => {
     success,
     fetchAppointments,
     cancelAppointment,
+    updateAppointment,
     deleteAppointment,
     selectAppointment,
     applyFilters,
@@ -415,6 +418,7 @@ const AppointmentList = () => {
   const [viewMode, setViewMode] = React.useState('list'); // 'list' | 'calendar'
   const [chatOpen, setChatOpen] = React.useState(false);
   const [chatAppointment, setChatAppointment] = React.useState(null);
+  const [expandedStatusActionsId, setExpandedStatusActionsId] = React.useState(null);
   const canUseInternalChat = ['provider', 'nurse'].includes(String(userRole || '').toLowerCase());
 
   // ── Initial load ──────────────────────────────────────────────────────────
@@ -466,6 +470,25 @@ const AppointmentList = () => {
   const closeChatModal = () => {
     setChatOpen(false);
     setChatAppointment(null);
+  };
+
+  const toggleStatusActions = (appointmentId) => {
+    setExpandedStatusActionsId((current) =>
+      current === appointmentId ? null : appointmentId
+    );
+  };
+
+  const handleMarkCompleted = (record) => {
+    if (!permissions.canCompleteAppointments) return;
+    updateAppointment({
+      id: record.id,
+      patient_id: record.patient_id,
+      doctor_id: record.doctor_id,
+      scheduled_at: record.scheduled_at,
+      notes: record.notes ?? '',
+      status: 'completed',
+    });
+    setExpandedStatusActionsId(null);
   };
 
   // ── Filter handlers ───────────────────────────────────────────────────────
@@ -559,11 +582,12 @@ const AppointmentList = () => {
     canUseInternalChat ||
     permissions.canUpdateAppointments ||
     permissions.canCancelAppointments ||
+    permissions.canCompleteAppointments ||
     permissions.canDeleteAppointments
       ? {
       title: 'Actions',
       key: 'actions',
-      width: 140,
+      width: 190,
       render: (_, record) => (
         <div style={{ display: 'flex', gap: 8 }}>
           {canUseInternalChat && (
@@ -588,18 +612,53 @@ const AppointmentList = () => {
             </Tooltip>
           )}
 
-          {permissions.canCancelAppointments && record.status === 'scheduled' && (
-            <Tooltip title="Cancel">
-              <Popconfirm
-                title="Cancel this appointment?"
-                okText="Yes"
-                cancelText="No"
-                onConfirm={() => cancelAppointment(record.id)}
-              >
-                <Button size="small" icon={<StopOutlined />} danger loading={actionLoading} />
-              </Popconfirm>
-            </Tooltip>
-          )}
+          {(permissions.canCancelAppointments || permissions.canCompleteAppointments) &&
+          record.status === 'scheduled' ? (
+            expandedStatusActionsId === record.id ? (
+              <>
+                {permissions.canCompleteAppointments && (
+                  <Tooltip title="Mark completed">
+                    <Popconfirm
+                      title="Mark this appointment as completed?"
+                      okText="Yes"
+                      cancelText="No"
+                      onConfirm={() => handleMarkCompleted(record)}
+                    >
+                      <Button
+                        size="small"
+                        icon={<CheckOutlined />}
+                        loading={actionLoading}
+                      />
+                    </Popconfirm>
+                  </Tooltip>
+                )}
+
+                {permissions.canCancelAppointments && (
+                  <Tooltip title="Cancel">
+                    <Popconfirm
+                      title="Cancel this appointment?"
+                      okText="Yes"
+                      cancelText="No"
+                      onConfirm={() => {
+                        cancelAppointment(record.id);
+                        setExpandedStatusActionsId(null);
+                      }}
+                    >
+                      <Button size="small" icon={<StopOutlined />} danger loading={actionLoading} />
+                    </Popconfirm>
+                  </Tooltip>
+                )}
+              </>
+            ) : (
+              <Tooltip title="Status actions">
+                <Button
+                  size="small"
+                  icon={<MoreOutlined />}
+                  onClick={() => toggleStatusActions(record.id)}
+                />
+              </Tooltip>
+            )
+          ) : null}
 
           {permissions.canDeleteAppointments && (
             <Tooltip title="Delete">
