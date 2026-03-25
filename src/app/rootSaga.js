@@ -9,7 +9,7 @@ import billingSaga from '../modules/billing/billingSaga';
 import staffSaga from '../modules/staff/staffSaga'; 
 export default function* rootSaga() {
   yield all([
-    authSaga(),
+     authSaga(),
      appointmentSaga(),
      calendarSaga(),
      chatSaga(),
