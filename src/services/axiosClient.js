@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-const currentHostname = window.location.hostname;
-const dynamicBaseUrl = `http://${currentHostname}/api`;
+const currentHostname = window.location.hostname; 
+const dynamicBaseUrl = `http://${currentHostname}/PHPTasks/team-backend/api`; //cors
 
 const axiosClient = axios.create({
   baseURL: dynamicBaseUrl,
+  withCredentials: true,
 });
 
 // ==========================================
@@ -36,7 +37,6 @@ axiosClient.interceptors.request.use((config) => {
     if (csrfToken) {
       config.headers['X-CSRF-Token'] = csrfToken;
     }
-
     console.log("csrf token attached ", config.headers['X-CSRF-Token']);
     
   }

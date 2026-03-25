@@ -7,7 +7,7 @@ import { toast } from 'react-toastify';
 
 export default function useIdleLogout(
   isLoggedIn,
-  timeoutMs =  60 * 15 * 1000,
+  timeoutMs =  60 * 1000,
   warningMs = 10 * 1000,
   onWarning = () => {
     toast.warn('Inactive, you will be logged out shortly');
@@ -31,7 +31,7 @@ export default function useIdleLogout(
   const scheduleTimers = useCallback(() => {
     clearTimers();
 
-    const warningDelay = Math.max(0, timeoutMs - warningMs);
+    const warningDelay = Math.max(0,  warningMs);
     warningTimerRef.current = setTimeout(() => {
       onWarning(); // e.g. toast.warn('Inactive, you will be logged out shortly');
     }, warningDelay);
