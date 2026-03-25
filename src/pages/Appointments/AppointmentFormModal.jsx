@@ -1,18 +1,27 @@
 import React, { useEffect, useRef } from 'react';
 import { Modal, Form, Select, DatePicker, Input, Button } from 'antd';
+import { useSelector } from 'react-redux';
 import dayjs from 'dayjs';
 import useAppointments from '../../modules/appointments/hooks/useAppointments';
-import { PATIENT_MAP, DOCTOR_MAP } from '../../utils/appointmentMapping';
+import useAppointmentReferenceData from './useAppointmentReferenceData';
+import { selectUserRole } from '../../modules/auth/selectors';
+import { getAppointmentRoleCapabilities } from './appointmentPermissions';
 
 const { Option } = Select;
 const { TextArea } = Input;
 
 const AppointmentFormModal = ({ open, onClose, editingAppointment }) => {
   const [form] = Form.useForm();
+  const userRole = useSelector(selectUserRole);
+  const permissions = getAppointmentRoleCapabilities(userRole);
   const { createAppointment, updateAppointment, actionLoading } =
     useAppointments();
+  const { patients, doctors, loading: referenceLoading } = useAppointmentReferenceData();
 
   const isEditing = !!editingAppointment;
+  const canSubmit = isEditing
+    ? permissions.canUpdateAppointments
+    : permissions.canCreateAppointments;
 
   // Track when actionLoading transitions true → false while modal is open
   // This is more reliable than watching `success`, which gets cleared by re-fetches
@@ -46,28 +55,32 @@ const AppointmentFormModal = ({ open, onClose, editingAppointment }) => {
         form.resetFields();
       }
     }
-  }, [open]);
+  }, [open, isEditing, editingAppointment, form]);
 
-  const handleSubmit = () => {
-    form
-      .validateFields()
-      .then((values) => {
-        const payload = {
-          patient_id: values.patient_id,
-          doctor_id: values.doctor_id,
-          scheduled_at: values.scheduled_at.format('YYYY-MM-DD HH:mm:ss'),
-          notes: values.notes ?? '',
-        };
-        if (isEditing) {
-          updateAppointment({ id: editingAppointment.id, ...payload });
-        } else {
-          createAppointment(payload);
-        }
-      })
-      .catch((err) => {
-        console.warn('Validation error:', err);
-      });
-  };
+const handleSubmit = () => {
+  if (!canSubmit) {
+    return;
+  }
+
+  form
+    .validateFields()
+    .then((values) => {
+      const payload = {
+        patient_id: values.patient_id,
+        doctor_id: values.doctor_id,
+        scheduled_at: values.scheduled_at.format('YYYY-MM-DD HH:mm:ss'),
+        notes: values.notes ?? '',
+      };
+      if (isEditing) {
+        updateAppointment({ id: editingAppointment.id, ...payload });
+      } else {
+        createAppointment(payload);
+      }
+    })
+    .catch((err) => {
+      console.warn('Validation error:', err);
+    });
+};
   const handleCancel = () => {
     form.resetFields();
     onClose();
@@ -93,9 +106,19 @@ const AppointmentFormModal = ({ open, onClose, editingAppointment }) => {
             label="Patient"
             rules={[{ required: true, message: 'Please select a patient' }]}
           >
-            <Select placeholder="Select patient" showSearch style={{ width: '100%' }}>
-              {Object.entries(PATIENT_MAP).map(([id, name]) => (
-                <Option key={id} value={Number(id)}>{name}</Option>
+            <Select
+              placeholder="Select patient"
+              showSearch
+              style={{ width: '100%' }}
+              loading={referenceLoading}
+              optionFilterProp="children"
+              notFoundContent={
+                permissions.canReadPatients ? 'No patients found' : 'Patients are not available for your role'
+              }
+              disabled={!permissions.canReadPatients}
+            >
+              {patients.map(({ value, label }) => (
+                <Option key={value} value={value}>{label}</Option>
               ))}
             </Select>
           </Form.Item>
@@ -105,9 +128,19 @@ const AppointmentFormModal = ({ open, onClose, editingAppointment }) => {
             label="Doctor"
             rules={[{ required: true, message: 'Please select a doctor' }]}
           >
-            <Select placeholder="Select doctor" showSearch style={{ width: '100%' }}>
-              {Object.entries(DOCTOR_MAP).map(([id, name]) => (
-                <Option key={id} value={Number(id)}>{name}</Option>
+            <Select
+              placeholder="Select doctor"
+              showSearch
+              style={{ width: '100%' }}
+              loading={referenceLoading}
+              optionFilterProp="children"
+              notFoundContent={
+                permissions.canReadDoctors ? 'No doctors found' : 'Doctors are not available for your role'
+              }
+              disabled={!permissions.canReadDoctors}
+            >
+              {doctors.map(({ value, label }) => (
+                <Option key={value} value={value}>{label}</Option>
               ))}
             </Select>
           </Form.Item>
@@ -146,7 +179,7 @@ const AppointmentFormModal = ({ open, onClose, editingAppointment }) => {
           }}
         >
           <Button onClick={handleCancel}>Cancel</Button>
-          <Button type="primary" onClick={handleSubmit} loading={actionLoading}>
+          <Button type="primary" onClick={handleSubmit} loading={actionLoading} disabled={!canSubmit}>
             {isEditing ? 'Save Changes' : 'Create Appointment'}
           </Button>
         </div>

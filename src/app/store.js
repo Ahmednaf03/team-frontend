@@ -3,6 +3,7 @@ import createSagaMiddleware from 'redux-saga';
 import rootReducer from './rootReducer'; 
 import rootSaga from './rootSaga';
 import calendarReducer from '../modules/calendar/calendarSlice';
+import chatReducer from '../modules/chat/chatSlice';
 import notificationReducer from '../modules/notifications/notificationSlice';
 
 const sagaMiddleware = createSagaMiddleware();

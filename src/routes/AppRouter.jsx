@@ -42,9 +42,9 @@ const PageLoader = () => (
   </div>
 );
 
-export default function AppRouter() {
-  const dispatch = useDispatch();
-  const isLoggedIn = useSelector(selectIsLoggedIn);
+export default function AppRouter({ tenantConfig }) {
+  const dispatch    = useDispatch();
+  const isLoggedIn  = useSelector(selectIsLoggedIn);
   const initialized = useSelector(selectAuthInitialized);
 
   //  const brokenGlobalState = null;
@@ -62,14 +62,20 @@ export default function AppRouter() {
   if (!initialized) return <PageLoader />;
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Suspense fallback={<PageLoader />}>
         <Routes>
 
           {/* ── Public routes ───────────────────────────────────────────── */}
           <Route
             path="/login"
-            element={isLoggedIn ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+            element={
+              isLoggedIn ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <LoginPage tenantConfig={tenantConfig} />
+              )
+            }
           />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 

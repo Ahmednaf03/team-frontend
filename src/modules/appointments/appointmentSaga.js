@@ -1,4 +1,4 @@
-import { call, put, takeLatest, select } from 'redux-saga/effects';
+import { all, call, put, takeLatest, select } from 'redux-saga/effects';
 import {
   fetchAppointmentsAPI,
   fetchAppointmentByIdAPI,
@@ -8,7 +8,8 @@ import {
   cancelAppointmentAPI,
   deleteAppointmentAPI,
 } from './appointmentAPI';
-import { enrichAppointment } from '../../utils/appointmentMapping';
+import { enrichAppointment, extractCollection, unwrapAppointment } from '../../utils/appointmentMapping';
+import { fetchAppointmentMessagesAPI } from '../chat/chatAPI';
 import {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
@@ -33,6 +34,25 @@ import {
   deleteAppointmentFailure,
 } from './appointmentSlice';
 
+const extractMessages = (payload) => {
+  const data = payload?.data ?? payload;
+  return Array.isArray(data) ? data : [];
+};
+
+const resolveLatestThreadNote = async (appointment) => {
+  try {
+    const response = await fetchAppointmentMessagesAPI(appointment.id);
+    const messages = extractMessages(response);
+    const latestMessage = messages[messages.length - 1];
+
+    return latestMessage?.message
+      ? { appointmentId: appointment.id, notes: latestMessage.message }
+      : null;
+  } catch (error) {
+    return null;
+  }
+};
+
 // ── Fetch all appointments (with current filters + pagination) ─────────────────
 function* handleFetchAppointments() {
   try {
@@ -53,11 +73,27 @@ function* handleFetchAppointments() {
     console.log('API Response:', responseData);
 
     // Backend returns: { data: [...], pagination: { currentPage, totalPages, ... } }
-    const enrichedData = (responseData.data ?? responseData).map(enrichAppointment);
+    const enrichedData = extractCollection(responseData).map((appointment) =>
+      enrichAppointment(appointment)
+    );
+    const latestNotesByAppointment = yield all(
+      enrichedData.map((appointment) => call(resolveLatestThreadNote, appointment))
+    );
+    const latestNotesMap = latestNotesByAppointment.reduce((acc, entry) => {
+      if (entry?.appointmentId && typeof entry.notes === 'string') {
+        acc[entry.appointmentId] = entry.notes;
+      }
+      return acc;
+    }, {});
+    const hydratedData = enrichedData.map((appointment) =>
+      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
+        ? { ...appointment, notes: latestNotesMap[appointment.id] }
+        : appointment
+    );
 
     yield put(
       fetchAppointmentsSuccess({
-        data: enrichedData,
+        data: hydratedData,
         pagination: responseData.pagination ?? null,
       })
     );
@@ -75,7 +111,7 @@ function* handleFetchAppointments() {
 function* handleFetchUpcoming() {
   try {
     const responseData = yield call(fetchUpcomingAppointmentsAPI);
-    const data = responseData.data ?? responseData;
+    const data = extractCollection(responseData);
     const enrichedData = Array.isArray(data) ? data.map(enrichAppointment) : data;
     yield put(fetchUpcomingSuccess(enrichedData));
   } catch (error) {
@@ -89,7 +125,7 @@ function* handleFetchUpcoming() {
 function* handleFetchAppointmentById(action) {
   try {
     const responseData = yield call(fetchAppointmentByIdAPI, action.payload);
-    const data = responseData.data ?? responseData;
+    const data = unwrapAppointment(responseData);
     yield put(fetchAppointmentByIdSuccess(enrichAppointment(data)));
   } catch (error) {
     const message =
@@ -102,7 +138,8 @@ function* handleFetchAppointmentById(action) {
 function* handleCreateAppointment(action) {
   try {
     const responseData = yield call(createAppointmentAPI, action.payload);
-    yield put(createAppointmentSuccess(responseData.message || responseData));
+    const data = unwrapAppointment(responseData);
+    yield put(createAppointmentSuccess(enrichAppointment(data)));
 
     // Refresh data to ensure UI is in sync
     yield put(fetchAppointmentsRequest());
