@@ -93,6 +93,14 @@ const calendarSlice = createSlice({
       state.error = null;
       state.success = null;
     },
+    updateCalendarNotesPreview: (state, action) => {
+      const { appointmentId, notes } = action.payload;
+      state.appointments = state.appointments.map((appointment) =>
+        appointment.id === appointmentId
+          ? { ...appointment, notes }
+          : appointment
+      );
+    },
   },
   extraReducers: (builder) => {
     // We rely on calendarSaga synchronization to trigger re-fetches
@@ -111,6 +119,7 @@ export const {
   setViewMode,
   setSelectedDoctor,
   clearMessages,
+  updateCalendarNotesPreview,
 } = calendarSlice.actions;
 
 export default calendarSlice.reducer;

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import styled, { keyframes } from 'styled-components';
+import { useSelector } from 'react-redux';
 import {
   Receipt,
   Search,
@@ -485,6 +486,8 @@ const formatDate = (dateStr) => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const InvoicePage = () => {
+  const userRole = useSelector((state) => state.auth.user?.role);
+  const canMarkPaid = userRole === 'admin' || userRole === 'Admin';
   const {
     invoices,
     summary,
@@ -691,13 +694,17 @@ const InvoicePage = () => {
                   <Td>{formatDate(inv.created_at)}</Td>
                   <Td>{formatDate(inv.paid_at)}</Td>
                   <Td>
-                    {inv.status === 'PENDING' ? (
+                    {inv.status === 'PENDING' && canMarkPaid ? (
                       <ActionBtn
                         onClick={() => handleMarkPaid(inv.id)}
                         disabled={submitting}
                       >
                         Mark Paid
                       </ActionBtn>
+                    ) : inv.status === 'PENDING' ? (
+                      <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+                        Pending
+                      </span>
                     ) : (
                       <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 600 }}>
                         ✓ Paid

@@ -18,11 +18,6 @@ export default function* rootSaga() {
     prescriptionSaga(),
     billingSaga(),
     staffSaga(), 
-    notificationSaga
-    // Future sagas plug in here:
-    // tenantSaga(),
-    // patientSaga(),
-
-    // notificationSaga(),
+    notificationSaga(),
   ]);
 } 

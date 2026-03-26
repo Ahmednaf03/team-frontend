@@ -26,7 +26,9 @@ const App = () => {
     const fetchTenantDetails = async () => {
       try {
         const response = await axiosClient.get('/resolve');
+        console.log("tenant config ",response.data );
         setTenantConfig(response.data);
+        
       } catch (err) {
         setError('Workspace not found or inactive.');
       } finally {
@@ -98,7 +100,7 @@ const App = () => {
 
   return (
     <Provider store={store}>
-      <CustomThemeProvider initialTheme={tenantConfig?.theme}>
+      <CustomThemeProvider initialTheme="dark">
         {/* 2. Wrap the Router in the global Error Boundary */}
         <ErrorBoundary>
           <AppRouter tenantConfig={tenantConfig} />
