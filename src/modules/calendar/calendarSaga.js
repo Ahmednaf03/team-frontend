@@ -1,7 +1,7 @@
 import { call, put, takeLatest, select, race, delay } from 'redux-saga/effects';
 import { enrichAppointment } from '../../utils/appointmentMapping';
 import { fetchCalendarDataAPI, rescheduleAppointmentAPI } from './calendarAPI';
-import { fetchAppointmentMessageSummariesAPI } from '../chat/chatAPI';
+import axiosClient from '../../services/axiosClient';
 import {
   fetchCalendarDataRequest,
   fetchCalendarDataSuccess,
@@ -34,6 +34,20 @@ const buildLatestNotesMap = (payload) =>
 
     return acc;
   }, {});
+
+const fetchAppointmentMessageSummariesAPI = async (appointmentIds = []) => {
+  const params = Array.isArray(appointmentIds) && appointmentIds.length > 0
+    ? { appointment_ids: appointmentIds.join(',') }
+    : {};
+
+  const response = await axiosClient.get('/messages', {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+    params,
+  });
+
+  return response.data;
+};
 
 // ── Fetch calendar data ───────────────────────────────────────────────────────
 function* handleFetchCalendarData() {

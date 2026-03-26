@@ -8,11 +8,13 @@ import {
   cancelAppointmentAPI,
   deleteAppointmentAPI,
 } from './appointmentAPI';
+
 import {
   enrichAppointment,
   extractCollection,
   unwrapAppointment,
 } from '../../utils/appointmentMapping';
+
 import { buildPaginationCacheKey } from '../../utils/paginationCache';
 import { fetchAppointmentMessageSummariesAPI } from '../chat/chatAPI';
 
