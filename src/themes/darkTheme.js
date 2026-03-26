@@ -10,6 +10,7 @@ export const darkTheme = {
     sidebarBg: '#0f172a',     // Blends with background
     sidebarText: '#f8fafc',
     sidebarHover: '#1e293b',  // Highlights same color as cards
+    sidebarTextHover: '#93c5fd',
     danger: '#ef4444'         // Standard red
   }
 };

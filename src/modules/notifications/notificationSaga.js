@@ -1,10 +1,12 @@
-import { call, put, takeLatest } from 'redux-saga/effects';
+import { call, put, takeLatest, select } from 'redux-saga/effects';
 import {
   fetchNotificationsAPI,
   markAsReadAPI,
   markAllAsReadAPI,
   clearAllNotificationsAPI,
 } from './notificationAPI';
+import { fetchAppointmentsAPI } from '../appointments/appointmentAPI';
+import { extractCollection, enrichAppointment } from '../../utils/appointmentMapping';
 import {
   fetchNotificationsRequest,
   fetchNotificationsSuccess,
@@ -17,9 +19,34 @@ import {
   clearAllFailure,
 } from './notificationSlice';
 
+const normalizeNotificationTitle = (notification) => {
+  const type = String(notification?.type || '').toLowerCase();
+  const title = String(notification?.title || '').trim();
+  const message = String(notification?.message || '').trim().toLowerCase();
+
+  if (type !== 'appointment') {
+    return title;
+  }
+
+  const isGenericAppointmentTitle = title.toLowerCase() === 'new appointment';
+  const isMessageStyleNotification =
+    !message.startsWith('new appointment') &&
+    ['message', 'note', 'communication', 'chat'].some((keyword) =>
+      message.includes(keyword)
+    );
+
+  if (isGenericAppointmentTitle && isMessageStyleNotification) {
+    return 'New Message in Appointment';
+  }
+
+  return title;
+};
+
 // ── Fetch notifications ───────────────────────────────────────────────────────
 function* handleFetchNotifications() {
   try {
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
     const responseData = yield call(fetchNotificationsAPI);
     const list = responseData.data ?? responseData;
     const arrayList = Array.isArray(list) ? list : [];
@@ -27,10 +54,31 @@ function* handleFetchNotifications() {
     // Map backend `created_at` to frontend `timestamp`
     const mappedList = arrayList.map(n => ({
       ...n,
+      title: normalizeNotificationTitle(n),
       read: n.is_read === 1 || n.is_read === true || n.read === true,
       timestamp: n.created_at || n.timestamp
     }));
-    yield put(fetchNotificationsSuccess(mappedList));
+    let scopedList = mappedList;
+
+    if (currentRole === 'provider' && currentUser?.id) {
+      const appointmentResponse = yield call(fetchAppointmentsAPI, {
+        doctor_id: currentUser.id,
+        per_page: 500,
+      });
+      const providerAppointments = extractCollection(appointmentResponse).map(enrichAppointment);
+      const providerAppointmentIds = new Set(
+        providerAppointments.map((appointment) => Number(appointment.id))
+      );
+
+      scopedList = mappedList.filter((notification) => {
+        if (notification.type !== 'appointment') return true;
+        const referenceId = Number(notification.reference_id);
+        if (!Number.isFinite(referenceId)) return false;
+        return providerAppointmentIds.has(referenceId);
+      });
+    }
+
+    yield put(fetchNotificationsSuccess(scopedList));
   } catch (error) {
     const message =
       error.response?.data?.data?.error || error.response?.data?.message || 'Failed to load notifications.';

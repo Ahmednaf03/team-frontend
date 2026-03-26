@@ -21,12 +21,12 @@ export const APPOINTMENT_ROLE_CAPABILITIES = {
   },
   nurse: {
     canViewAppointments: true,
-    canCreateAppointments: false,
+    canCreateAppointments: true,
     canUpdateAppointments: false,
     canCancelAppointments: false,
     canCompleteAppointments: false,
     canDeleteAppointments: false,
-    canReadPatients: false,
+    canReadPatients: true,
     canReadDoctors: true,
   },
   receptionist: {

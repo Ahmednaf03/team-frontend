@@ -233,7 +233,7 @@ export default function PatientLoginPage() {
     const { access_token, csrf_token } = res.data.data ?? res.data;
  
     localStorage.setItem('access_token', access_token);
-    if (csrf_token) localStorage.setItem('csrf_token', csrf_token);
+    if (csrf_token) sessionStorage.setItem('csrf_token', csrf_token);
  
     // ↓ was '/patient-dashboard' — now points to the real profile page
     navigate('/patient-profile', { replace: true });

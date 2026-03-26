@@ -15,9 +15,11 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTheme } from 'styled-components';
+import { useSelector } from 'react-redux';
 import useCalendar from '../../modules/calendar/hooks/useCalendar';
 import { enrichAppointment } from '../../utils/appointmentMapping';
 import useAppointmentReferenceData from './useAppointmentReferenceData';
+import { selectUserRole } from '../../modules/auth/selectors';
 import {
   PageWrapper,
   PageHeader,
@@ -40,6 +42,9 @@ import {
 
 const { Option } = Select;
 
+const getAppointmentStatusLabel = (status) =>
+  String(status || '').toLowerCase() === 'completed' ? 'Confirmed' : status;
+
 const AppointmentCalendar = ({ showHeader = true }) => {
   const {
     appointments,
@@ -55,11 +60,13 @@ const AppointmentCalendar = ({ showHeader = true }) => {
     dismissMessages,
   } = useCalendar();
   const theme = useTheme();
+  const userRole = useSelector(selectUserRole);
   const {
     doctors: doctorOptions,
     patientLookup,
     doctorLookup,
   } = useAppointmentReferenceData();
+  const isProvider = String(userRole || '').toLowerCase() === 'provider';
 
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const dragRef = useRef(null); // stores { id, originalDate, originalTime }
@@ -210,18 +217,22 @@ const AppointmentCalendar = ({ showHeader = true }) => {
 
       {/* ── Toolbar ── */}
       <ToolbarRow>
-        <ToolbarLabel>Doctor:</ToolbarLabel>
-        <Select
-          placeholder="All doctors"
-          allowClear
-          style={{ width: 180 }}
-          value={selectedDoctor ?? undefined}
-          onChange={(val) => changeDoctor(val ?? null)}
-        >
-          {doctorOptions.map(({ value, label }) => (
-            <Option key={value} value={value}>{label}</Option>
-          ))}
-        </Select>
+        {!isProvider && (
+          <>
+            <ToolbarLabel>Doctor:</ToolbarLabel>
+            <Select
+              placeholder="All doctors"
+              allowClear
+              style={{ width: 180 }}
+              value={selectedDoctor ?? undefined}
+              onChange={(val) => changeDoctor(val ?? null)}
+            >
+              {doctorOptions.map(({ value, label }) => (
+                <Option key={value} value={value}>{label}</Option>
+              ))}
+            </Select>
+          </>
+        )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           {rescheduling && (
@@ -316,7 +327,7 @@ const AppointmentCalendar = ({ showHeader = true }) => {
                         : 'red'
                     }
                   >
-                    {selectedAppointment.status ?? '—'}
+                    {getAppointmentStatusLabel(selectedAppointment.status) ?? '—'}
                   </Tag>
                 </span>
               </DetailItem>

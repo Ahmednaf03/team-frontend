@@ -1,4 +1,4 @@
-import { all, call, put, takeLatest, select } from 'redux-saga/effects';
+import { call, put, takeLatest, select } from 'redux-saga/effects';
 import {
   fetchAppointmentsAPI,
   fetchAppointmentByIdAPI,
@@ -9,7 +9,7 @@ import {
   deleteAppointmentAPI,
 } from './appointmentAPI';
 import { enrichAppointment, extractCollection, unwrapAppointment } from '../../utils/appointmentMapping';
-import { fetchAppointmentMessagesAPI } from '../chat/chatAPI';
+import { fetchAppointmentMessageSummariesAPI } from '../chat/chatAPI';
 import {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
@@ -39,30 +39,33 @@ const extractMessages = (payload) => {
   return Array.isArray(data) ? data : [];
 };
 
-const resolveLatestThreadNote = async (appointment) => {
-  try {
-    const response = await fetchAppointmentMessagesAPI(appointment.id);
-    const messages = extractMessages(response);
-    const latestMessage = messages[messages.length - 1];
+const buildLatestNotesMap = (payload) =>
+  extractMessages(payload).reduce((acc, item) => {
+    const appointmentId = Number(item?.appointment_id);
+    const latestMessage = item?.latest_message;
 
-    return latestMessage?.message
-      ? { appointmentId: appointment.id, notes: latestMessage.message }
-      : null;
-  } catch (error) {
-    return null;
-  }
-};
+    if (Number.isFinite(appointmentId) && typeof latestMessage === 'string') {
+      acc[appointmentId] = latestMessage;
+    }
+
+    return acc;
+  }, {});
 
 // ── Fetch all appointments (with current filters + pagination) ─────────────────
 function* handleFetchAppointments() {
   try {
     const { filters, pagination } = yield select((state) => state.appointments);
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
 
     const params = {
       page: pagination.currentPage,
       per_page: pagination.perPage,
       ...(filters.status && { status: filters.status }),
-      ...(filters.doctorId && { doctor_id: filters.doctorId }),
+      ...((isProvider ? currentUser?.id : filters.doctorId) && {
+        doctor_id: isProvider ? currentUser.id : filters.doctorId,
+      }),
       ...(filters.patientId && { patient_id: filters.patientId }),
       ...(filters.dateFrom && { date_from: filters.dateFrom }),
       ...(filters.dateTo && { date_to: filters.dateTo }),
@@ -76,24 +79,25 @@ function* handleFetchAppointments() {
     const enrichedData = extractCollection(responseData).map((appointment) =>
       enrichAppointment(appointment)
     );
-    const latestNotesByAppointment = yield all(
-      enrichedData.map((appointment) => call(resolveLatestThreadNote, appointment))
-    );
-    const latestNotesMap = latestNotesByAppointment.reduce((acc, entry) => {
-      if (entry?.appointmentId && typeof entry.notes === 'string') {
-        acc[entry.appointmentId] = entry.notes;
-      }
-      return acc;
-    }, {});
+    const appointmentIds = enrichedData.map((appointment) => appointment.id).filter(Boolean);
+    const latestNotesResponse = appointmentIds.length
+      ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
+      : { data: [] };
+    const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
     const hydratedData = enrichedData.map((appointment) =>
       Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
         ? { ...appointment, notes: latestNotesMap[appointment.id] }
         : appointment
     );
+    const scopedData = isProvider
+      ? hydratedData.filter(
+          (appointment) => Number(appointment.doctor_id) === Number(currentUser?.id)
+        )
+      : hydratedData;
 
     yield put(
       fetchAppointmentsSuccess({
-        data: hydratedData,
+        data: scopedData,
         pagination: responseData.pagination ?? null,
       })
     );
@@ -110,10 +114,18 @@ function* handleFetchAppointments() {
 // ── Fetch upcoming ────────────────────────────────────────────────────────────
 function* handleFetchUpcoming() {
   try {
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
     const responseData = yield call(fetchUpcomingAppointmentsAPI);
     const data = extractCollection(responseData);
     const enrichedData = Array.isArray(data) ? data.map(enrichAppointment) : data;
-    yield put(fetchUpcomingSuccess(enrichedData));
+    const scopedData = isProvider && Array.isArray(enrichedData)
+      ? enrichedData.filter(
+          (appointment) => Number(appointment.doctor_id) === Number(currentUser?.id)
+        )
+      : enrichedData;
+    yield put(fetchUpcomingSuccess(scopedData));
   } catch (error) {
     const message =
       error.response?.data?.message || 'Failed to fetch upcoming appointments.';

@@ -104,7 +104,7 @@ const App = () => {
 
   return (
     <Provider store={store}>
-      <CustomThemeProvider initialTheme="dark">
+      <CustomThemeProvider initialTheme={tenantConfig?.theme}>
         {/* 2. Wrap the Router in the global Error Boundary */}
         <ErrorBoundary>
           <AppRouter tenantConfig={tenantConfig} />

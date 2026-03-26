@@ -47,12 +47,14 @@ const Page = styled.div`
 
 const PageHeader = styled.div`
   background: ${({ theme }) => theme.colors.surface};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  padding: 16px 0 20px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 16px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 16px;
+  margin-bottom: 14px;
 `;
 
 const HeaderLeft = styled.div`
@@ -92,7 +94,8 @@ const AddButton = styled.button`
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 10px 20px;
+  min-height: 42px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -117,9 +120,13 @@ const AddButton = styled.button`
 // ─── Toolbar ────────────────────────────────────────────────────────────────
 
 const Toolbar = styled.div`
-  padding: 16px 0 0;
+  background: ${({ theme }) => theme.colors.surface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 16px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 `;
@@ -127,13 +134,12 @@ const Toolbar = styled.div`
 const SearchWrap = styled.div`
   position: relative;
   flex: 1;
-  min-width: 240px;
-  max-width: 420px;
+  min-width: 280px;
 `;
 
 const SearchInput = styled.input`
   width: 100%;
-  height: 40px;
+  height: 42px;
   border: 1.5px solid ${({ theme }) => theme.colors.border};
   border-radius: 10px;
   padding: 0 14px 0 40px;
@@ -168,15 +174,17 @@ const InlineIcon = styled.span`
 `;
 
 const StatBadge = styled.div`
-  margin-left: auto;
-  background: ${({ theme }) => theme.colors.surface};
+  min-height: 42px;
+  background: ${({ theme }) => theme.colors.background};
   border: 1.5px solid ${({ theme }) => theme.colors.border};
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: 10px;
+  padding: 0 14px;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.textSecondary};
   font-weight: 500;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
   
   span {
     color: ${({ theme }) => theme.colors.primary};
@@ -622,7 +630,9 @@ const validateForm = (data, modalMode = 'create') => {
 
 const PatientList = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const isAdmin = normalizedRole === 'admin';
+  const canCreatePatient = ['admin', 'nurse', 'receptionist'].includes(normalizedRole);
 
   const {
     patients, total, loading, submitting, error,
@@ -749,7 +759,7 @@ const PatientList = () => {
             <PageSubtitle>Manage all registered patients</PageSubtitle>
           </div>
         </HeaderLeft>
-        {isAdmin && (
+        {canCreatePatient && (
           <AddButton onClick={openCreate} disabled={submitting}>
             <Plus size={16} /> Add Patient
           </AddButton>
@@ -800,7 +810,7 @@ const PatientList = () => {
                     <EmptyDesc>
                       {searchQuery
                         ? 'Try a different name, phone, or diagnosis.'
-                        : isAdmin
+                        : canCreatePatient
                           ? 'Click "Add Patient" to register the first patient.'
                           : 'No patients have been registered yet.'}
                     </EmptyDesc>

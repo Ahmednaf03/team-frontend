@@ -1,5 +1,20 @@
 import styled, { keyframes, css } from 'styled-components';
 
+const getPanelSurface = (theme) => {
+  const surface = theme.colors.surface;
+  if (surface === '#1e293b98' || theme.colors.background === '#0f172a') {
+    return '#182235';
+  }
+  return surface;
+};
+
+const getPanelSubtleSurface = (theme) => {
+  if (theme.colors.background === '#0f172a') {
+    return '#131c2d';
+  }
+  return theme.colors.background;
+};
+
 // ── Bell button (sits in Header) ──────────────────────────────────────────────
 export const BellWrapper = styled.div`
   position: relative;
@@ -55,10 +70,10 @@ export const PanelWrapper = styled.div`
   right: 0;
   width: 360px;
   max-height: 520px;
-  background: ${({ theme }) => theme.colors.surface};
+  background: ${({ theme }) => getPanelSurface(theme)};
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -72,6 +87,7 @@ export const PanelHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px 10px;
+  background: ${({ theme }) => getPanelSurface(theme)};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   flex-shrink: 0;
 `;
@@ -125,6 +141,7 @@ export const FilterTabs = styled.div`
   display: flex;
   gap: 4px;
   padding: 8px 12px;
+  background: ${({ theme }) => getPanelSubtleSurface(theme)};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   flex-shrink: 0;
 `;
@@ -155,6 +172,7 @@ export const NotificationList = styled.div`
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
+  background: ${({ theme }) => getPanelSurface(theme)};
 
   &::-webkit-scrollbar {
     width: 4px;
@@ -178,13 +196,17 @@ export const NotificationItem = styled.div`
   padding: 12px 16px;
   cursor: pointer;
   background: ${({ unread, theme }) =>
-    unread ? theme.colors.primary + '08' : 'transparent'};
+    unread
+      ? theme.colors.background === '#0f172a'
+        ? 'rgba(59, 130, 246, 0.12)'
+        : theme.colors.primary + '08'
+      : 'transparent'};
   border-left: 3px solid ${({ unread, theme }) =>
     unread ? theme.colors.primary : 'transparent'};
   transition: background 0.15s;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background};
+    background: ${({ theme }) => getPanelSubtleSurface(theme)};
   }
 `;
 
@@ -283,6 +305,7 @@ export const ErrorBanner = styled.div`
 // ── Panel footer ──────────────────────────────────────────────────────────────
 export const PanelFooter = styled.div`
   padding: 8px 16px;
+  background: ${({ theme }) => getPanelSurface(theme)};
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   text-align: center;
   flex-shrink: 0;

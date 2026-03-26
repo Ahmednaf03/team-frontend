@@ -23,7 +23,7 @@ axiosClient.interceptors.request.use(async (config) => {
   }
   // ---------------------------------
 
-  const publicRoutes = ['/login', '/resolve'];
+  const publicRoutes = ['/login', '/resolve', '/patient-login'];
   const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
 
   if (isPublicRoute) {

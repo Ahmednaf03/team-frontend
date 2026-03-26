@@ -25,7 +25,7 @@ function* handleLogin(action) {
     const decodedToken = jwtDecode(access_token);
     const user = {
       id: decodedToken.user_id,
-      role: decodedToken.role, // e.g., "admin"
+      role: decodedToken.role,
       tenant_id: decodedToken.tenant_id
     };
 
