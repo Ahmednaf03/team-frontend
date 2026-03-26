@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { Modal, Input, Form, Alert } from 'antd';
+import { Modal, Input, Form, Alert, message } from 'antd';
 import { LockOutlined, EyeInvisibleOutlined, EyeTwoTone, CheckCircleFilled } from '@ant-design/icons';
 import styled from 'styled-components';
 import { useThemeContext } from '../../context/ThemeContext';
 import { lightTheme } from '../../themes/theme';
 import { darkTheme } from '../../themes/darkTheme';
 import { warmTheme } from '../../themes/warmTheme';
+import { crimsonTheme } from '../../themes/crimsonTheme';
+import { greenTheme } from '../../themes/greenTheme';
 import {
   changePasswordRequest,
   clearChangePasswordState,
+  logoutRequest,
 } from '../../modules/auth/authSlice';
 
 // ─── Styled Components ────────────────────────────────────────────────────────
@@ -159,6 +162,8 @@ const THEME_MAP = {
   default: { label: 'Light', obj: lightTheme },
   dark:    { label: 'Dark',  obj: darkTheme  },
   warm:    { label: 'Warm',  obj: warmTheme  },
+  crimson: { label: 'Crimson', obj: crimsonTheme },
+  green:   { label: 'Healthcare Green', obj: greenTheme },
 };
 
 const PALETTE_KEYS = [
@@ -184,12 +189,15 @@ const SecuritySettings = () => {
     (state) => state.auth.changePassword
   );
 
-  // Close modal and reset form on success
+  // Close modal, notify, and force re-login on success
   useEffect(() => {
     if (success) {
       form.resetFields();
       setModalOpen(false);
-      dispatch(clearChangePasswordState());
+      message.success('Password changed successfully. Please sign in again.');
+      setTimeout(() => {
+        dispatch(logoutRequest());
+      }, 900);
     }
   }, [success, form, dispatch]);
 

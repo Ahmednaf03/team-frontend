@@ -4,6 +4,18 @@ import { Modal, Tooltip, Popconfirm, Tag, Badge } from 'antd';
 import { toast } from 'react-hot-toast';
 import usePatients from '../../modules/patients/hooks/usePatients';
 import useAuth from '../../modules/auth/hooks/useAuth';
+import {
+  Building2,
+  Plus,
+  Search,
+  Stethoscope,
+  Eye,
+  Pencil,
+  Trash2,
+  UserRound,
+  LoaderCircle,
+  Save,
+} from 'lucide-react';
 
 // ─── Animations ─────────────────────────────────────────────────────────────
 
@@ -35,12 +47,14 @@ const Page = styled.div`
 
 const PageHeader = styled.div`
   background: ${({ theme }) => theme.colors.surface};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  padding: 16px 0 20px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 16px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 16px;
+  margin-bottom: 14px;
 `;
 
 const HeaderLeft = styled.div`
@@ -80,7 +94,8 @@ const AddButton = styled.button`
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 10px 20px;
+  min-height: 42px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -105,9 +120,13 @@ const AddButton = styled.button`
 // ─── Toolbar ────────────────────────────────────────────────────────────────
 
 const Toolbar = styled.div`
-  padding: 16px 0 0;
+  background: ${({ theme }) => theme.colors.surface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 16px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 `;
@@ -115,13 +134,12 @@ const Toolbar = styled.div`
 const SearchWrap = styled.div`
   position: relative;
   flex: 1;
-  min-width: 240px;
-  max-width: 420px;
+  min-width: 280px;
 `;
 
 const SearchInput = styled.input`
   width: 100%;
-  height: 40px;
+  height: 42px;
   border: 1.5px solid ${({ theme }) => theme.colors.border};
   border-radius: 10px;
   padding: 0 14px 0 40px;
@@ -149,16 +167,24 @@ const SearchIcon = styled.span`
   font-size: 15px;
 `;
 
+const InlineIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+`;
+
 const StatBadge = styled.div`
-  margin-left: auto;
-  background: ${({ theme }) => theme.colors.surface};
+  min-height: 42px;
+  background: ${({ theme }) => theme.colors.background};
   border: 1.5px solid ${({ theme }) => theme.colors.border};
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: 10px;
+  padding: 0 14px;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.textSecondary};
   font-weight: 500;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
   
   span {
     color: ${({ theme }) => theme.colors.primary};
@@ -235,8 +261,8 @@ const Avatar = styled.div`
     $gender === 'Female'
       ? 'linear-gradient(135deg, #ec4899, #f472b6)'
       : $gender === 'Male'
-      ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
-      : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
+        ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
+        : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -271,16 +297,16 @@ const ActionBtn = styled.button`
   border-radius: 8px;
   border: 1.5px solid ${({ $variant }) =>
     $variant === 'view' ? '#e0e7ff' :
-    $variant === 'edit' ? '#fef3c7' :
-    '#fee2e2'};
+      $variant === 'edit' ? '#fef3c7' :
+        '#fee2e2'};
   background: ${({ $variant }) =>
     $variant === 'view' ? '#eef2ff' :
-    $variant === 'edit' ? '#fffbeb' :
-    '#fef2f2'};
+      $variant === 'edit' ? '#fffbeb' :
+        '#fef2f2'};
   color: ${({ $variant }) =>
     $variant === 'view' ? '#6366f1' :
-    $variant === 'edit' ? '#d97706' :
-    '#ef4444'};
+      $variant === 'edit' ? '#d97706' :
+        '#ef4444'};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -291,9 +317,9 @@ const ActionBtn = styled.button`
   &:hover {
     transform: scale(1.1);
     border-color: ${({ $variant }) =>
-      $variant === 'view' ? '#6366f1' :
+    $variant === 'view' ? '#6366f1' :
       $variant === 'edit' ? '#d97706' :
-      '#ef4444'};
+        '#ef4444'};
   }
 `;
 
@@ -458,7 +484,7 @@ const FormInput = styled.input`
   &:focus {
     border-color: ${({ $error, theme }) => ($error ? '#ef4444' : theme.colors.primary)};
     box-shadow: 0 0 0 3px ${({ $error }) =>
-      $error ? 'rgba(239,68,68,0.12)' : 'rgba(37,99,235,0.12)'};
+    $error ? 'rgba(239,68,68,0.12)' : 'rgba(37,99,235,0.12)'};
   }
 `;
 
@@ -543,8 +569,8 @@ const ViewAvatar = styled.div`
     $gender === 'Female'
       ? 'linear-gradient(135deg, #ec4899, #f472b6)'
       : $gender === 'Male'
-      ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
-      : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
+        ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
+        : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -574,15 +600,29 @@ const diagnosisColor = (d) => {
 
 const EMPTY_FORM = {
   name: '', age: '', gender: '', phone: '', address: '', diagnosis: '',
+  email: '', password: '',
 };
 
-const validateForm = (data) => {
+const validateForm = (data, modalMode = 'create') => {
   const errors = {};
   if (!data.name?.trim()) errors.name = 'Name is required';
   if (!data.age || isNaN(Number(data.age)) || Number(data.age) <= 0)
     errors.age = 'Valid age required';
   if (!data.gender) errors.gender = 'Gender is required';
   if (!data.phone?.trim()) errors.phone = 'Phone is required';
+  if (modalMode === 'create') {
+    if (!data.email?.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(data.email)) {
+      errors.email = 'Invalid email';
+    }
+
+    if (!data.password?.trim()) {
+      errors.password = 'Password is required';
+    } else if (data.password.length < 6) {
+      errors.password = 'Min 6 chars';
+    }
+  }
   return errors;
 };
 
@@ -590,7 +630,9 @@ const validateForm = (data) => {
 
 const PatientList = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const normalizedRole = String(user?.role || '').toLowerCase();
+  const isAdmin = normalizedRole === 'admin';
+  const canCreatePatient = ['admin', 'nurse', 'receptionist'].includes(normalizedRole);
 
   const {
     patients, total, loading, submitting, error,
@@ -644,6 +686,8 @@ const PatientList = () => {
       phone: patient.phone || '',
       address: patient.address || '',
       diagnosis: patient.diagnosis || '',
+      email: patient.email || '',
+      password: '',
     });
     setFormErrors({});
     setSelectedPatient(patient);
@@ -670,10 +714,14 @@ const PatientList = () => {
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = (e) => {
     e.preventDefault();
-    const errors = validateForm(formData);
+    const errors = validateForm(formData, modalMode);
     if (Object.keys(errors).length) { setFormErrors(errors); return; }
 
-    const payload = { ...formData, age: Number(formData.age) };
+    const payload = { ...formData, age: Number(formData.age), role: 'patient' };
+    if (modalMode === 'edit') {
+      delete payload.password;
+      delete payload.email;
+    }
 
     if (modalMode === 'create') {
       createPatient(payload, () => {
@@ -705,15 +753,15 @@ const PatientList = () => {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <PageHeader>
         <HeaderLeft>
-          <PageIcon>🏥</PageIcon>
+          <PageIcon><Building2 size={20} /></PageIcon>
           <div>
             <PageTitle>Patient Management</PageTitle>
             <PageSubtitle>Manage all registered patients</PageSubtitle>
           </div>
         </HeaderLeft>
-        {isAdmin && (
+        {canCreatePatient && (
           <AddButton onClick={openCreate} disabled={submitting}>
-            <span>＋</span> Add Patient
+            <Plus size={16} /> Add Patient
           </AddButton>
         )}
       </PageHeader>
@@ -721,7 +769,7 @@ const PatientList = () => {
       {/* ── Toolbar ────────────────────────────────────────────────────── */}
       <Toolbar>
         <SearchWrap>
-          <SearchIcon>🔍</SearchIcon>
+          <SearchIcon><Search size={15} /></SearchIcon>
           <SearchInput
             ref={searchRef}
             placeholder="Search by name, phone, diagnosis, gender…"
@@ -755,16 +803,16 @@ const PatientList = () => {
               <tr>
                 <td colSpan={7}>
                   <EmptyState>
-                    <EmptyIcon>🩺</EmptyIcon>
+                    <EmptyIcon><Stethoscope size={48} /></EmptyIcon>
                     <EmptyTitle>
                       {searchQuery ? 'No patients match your search' : 'No patients yet'}
                     </EmptyTitle>
                     <EmptyDesc>
                       {searchQuery
                         ? 'Try a different name, phone, or diagnosis.'
-                        : isAdmin
-                        ? 'Click "Add Patient" to register the first patient.'
-                        : 'No patients have been registered yet.'}
+                        : canCreatePatient
+                          ? 'Click "Add Patient" to register the first patient.'
+                          : 'No patients have been registered yet.'}
                     </EmptyDesc>
                   </EmptyState>
                 </td>
@@ -805,12 +853,16 @@ const PatientList = () => {
                   <Td onClick={(e) => e.stopPropagation()}>
                     <Actions>
                       <Tooltip title="View details" placement="top">
-                        <ActionBtn $variant="view" onClick={() => openView(patient)}>👁</ActionBtn>
+                        <ActionBtn $variant="view" onClick={() => openView(patient)}>
+                          <Eye size={15} />
+                        </ActionBtn>
                       </Tooltip>
                       {isAdmin && (
                         <>
                           <Tooltip title="Edit patient" placement="top">
-                            <ActionBtn $variant="edit" onClick={(e) => openEdit(e, patient)}>✏️</ActionBtn>
+                            <ActionBtn $variant="edit" onClick={(e) => openEdit(e, patient)}>
+                              <Pencil size={15} />
+                            </ActionBtn>
                           </Tooltip>
                           <Popconfirm
                             title="Delete this patient?"
@@ -820,7 +872,9 @@ const PatientList = () => {
                             cancelText="Cancel"
                             okButtonProps={{ danger: true }}
                           >
-                            <ActionBtn $variant="delete" onClick={(e) => e.stopPropagation()}>🗑️</ActionBtn>
+                            <ActionBtn $variant="delete" onClick={(e) => e.stopPropagation()}>
+                              <Trash2 size={15} />
+                            </ActionBtn>
                           </Popconfirm>
                         </>
                       )}
@@ -859,7 +913,10 @@ const PatientList = () => {
         onCancel={closeModal}
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700 }}>
-            <span>{modalMode === 'create' ? '🆕 Add New Patient' : '✏️ Edit Patient'}</span>
+            <InlineIcon>
+              {modalMode === 'create' ? <Plus size={16} /> : <Pencil size={16} />}
+            </InlineIcon>
+            <span>{modalMode === 'create' ? 'Add New Patient' : 'Edit Patient'}</span>
           </div>
         }
         footer={null}
@@ -927,6 +984,38 @@ const PatientList = () => {
             </FormGroup>
           </FormRow>
 
+          {modalMode === 'create' && (
+            <FormRow>
+              <FormGroup>
+                <FormLabel>
+                  Email <span className="req">*</span>
+                </FormLabel>
+                <FormInput
+                  type="email"
+                  $error={!!formErrors.email}
+                  value={formData.email}
+                  onChange={handleChange('email')}
+                  placeholder="e.g. john@example.com"
+                />
+                {formErrors.email && <FieldError>{formErrors.email}</FieldError>}
+              </FormGroup>
+              
+              <FormGroup>
+                <FormLabel>
+                  Password <span className="req">*</span>
+                </FormLabel>
+                <FormInput
+                  type="password"
+                  $error={!!formErrors.password}
+                  value={formData.password}
+                  onChange={handleChange('password')}
+                  placeholder="••••••••"
+                />
+                {formErrors.password && <FieldError>{formErrors.password}</FieldError>}
+              </FormGroup>
+            </FormRow>
+          )}
+
           <FormGroup>
             <FormLabel>Address</FormLabel>
             <FormInput
@@ -969,9 +1058,12 @@ const PatientList = () => {
               }}
             >
               {submitting ? (
-                <><PulsingSpan>⏳</PulsingSpan> Saving…</>
+                <><PulsingSpan><LoaderCircle size={14} /></PulsingSpan> Saving…</>
               ) : (
-                modalMode === 'create' ? '＋ Add Patient' : '✅ Save Changes'
+                <>
+                  {modalMode === 'create' ? <Plus size={14} /> : <Save size={14} />}
+                  {modalMode === 'create' ? 'Add Patient' : 'Save Changes'}
+                </>
               )}
             </button>
           </div>
@@ -984,7 +1076,8 @@ const PatientList = () => {
         onCancel={closeModal}
         title={
           <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-            👤 Patient Details
+            <UserRound size={16} />
+            <span>Patient Details</span>
           </div>
         }
         footer={
@@ -998,7 +1091,10 @@ const PatientList = () => {
                   color: '#d97706', cursor: 'pointer', fontWeight: 600, fontSize: 13,
                 }}
               >
-                ✏️ Edit
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Pencil size={14} />
+                  <span>Edit</span>
+                </span>
               </button>
               <Popconfirm
                 title="Delete this patient?"
@@ -1014,7 +1110,10 @@ const PatientList = () => {
                     color: '#ef4444', cursor: 'pointer', fontWeight: 600, fontSize: 13,
                   }}
                 >
-                  🗑️ Delete
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Trash2 size={14} />
+                    <span>Delete</span>
+                  </span>
                 </button>
               </Popconfirm>
             </div>

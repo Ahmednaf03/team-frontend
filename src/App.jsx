@@ -30,7 +30,9 @@ const App = () => {
     const fetchTenantDetails = async () => {
       try {
         const response = await axiosClient.get('/resolve');
+        console.log("tenant config ",response.data );
         setTenantConfig(response.data);
+        
       } catch (err) {
         setError('Workspace not found or inactive.');
       } finally {

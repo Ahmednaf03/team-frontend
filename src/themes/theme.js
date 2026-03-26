@@ -9,6 +9,7 @@ export const lightTheme = {
     sidebarBg: '#2c3e50',     // Dark blue sidebar
     sidebarText: '#ffffff',
     sidebarHover: '#34495e',
+    sidebarTextHover: '#9fd7ff',
     danger: '#e74c3c'
   }
 };

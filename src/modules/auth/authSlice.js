@@ -69,6 +69,11 @@ const authSlice = createSlice({
       state.isLoggedIn = false;
       state.loading = false;
       state.error = null;
+      state.changePassword = {
+        loading: false,
+        error: null,
+        success: false,
+      };
     },
 
     // Called after successful token refresh

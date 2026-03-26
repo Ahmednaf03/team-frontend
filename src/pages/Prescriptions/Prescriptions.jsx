@@ -8,8 +8,26 @@ import {
 import { toast } from 'react-hot-toast';
 import usePrescriptions from '../../modules/prescriptions/hooks/usePrescriptions';
 import useAuth from '../../modules/auth/hooks/useAuth';
+import useAppointmentReferenceData from '../Appointments/useAppointmentReferenceData';
+import { fetchAppointmentsAPI } from '../../modules/appointments/appointmentAPI';
+import { extractCollection, enrichAppointment } from '../../utils/appointmentMapping';
+import {
+  Pill,
+  CheckCircle2,
+  Package,
+  FileText,
+  ClipboardList,
+  NotebookPen,
+  LoaderCircle,
+} from 'lucide-react';
 
 const { Option } = Select;
+
+const InlineIcon = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+`;
 
 // ── Animations ────────────────────────────────────────────────────────────────
 const fadeUp = keyframes`
@@ -334,15 +352,22 @@ const ActionBtn = styled.button`
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
-  PENDING:   { color: 'orange', icon: '⏳', label: 'Pending' },
-  VERIFIED:  { color: 'blue',   icon: '✅', label: 'Verified' },
-  DISPENSED: { color: 'green',  icon: '💊', label: 'Dispensed' },
-  CANCELLED: { color: 'red',    icon: '❌', label: 'Cancelled' },
+  PENDING:   { color: 'orange', icon: <LoaderCircle size={13} />, label: 'Pending' },
+  VERIFIED:  { color: 'blue',   icon: <CheckCircle2 size={13} />, label: 'Verified' },
+  DISPENSED: { color: 'green',  icon: <Pill size={13} />, label: 'Dispensed' },
+  CANCELLED: { color: 'red',    icon: <Package size={13} />, label: 'Cancelled' },
 };
 
 const StatusTag = ({ status }) => {
   const cfg = STATUS_CONFIG[status] || { color: 'default', icon: '?', label: status };
-  return <Tag color={cfg.color}>{cfg.icon} {cfg.label}</Tag>;
+  return (
+    <Tag color={cfg.color}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {cfg.icon}
+        <span>{cfg.label}</span>
+      </span>
+    </Tag>
+  );
 };
 
 const STATUSES = ['ALL', 'PENDING', 'VERIFIED', 'DISPENSED', 'CANCELLED'];
@@ -597,10 +622,11 @@ const Prescriptions = () => {
   const theme = useTheme();
   const { user } = useAuth();
   const role = user?.role?.toLowerCase();
+  const { patientLookup, doctorLookup } = useAppointmentReferenceData();
 
-  const canCreate  = ['admin', 'provider'].includes(role);
-const canVerify   = ['pharmacist', 'admin'].includes(role);
-const canDispense = ['pharmacist', 'admin'].includes(role);
+  const canCreate  = ['provider'].includes(role);
+const canVerify   = ['pharmacist'].includes(role);
+const canDispense = ['pharmacist'].includes(role);
 
   const {
     prescriptions, currentPrescription, loading, detailLoading, submitting,
@@ -620,13 +646,49 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
 
   const [createForm, setCreateForm] = useState(EMPTY_CREATE);
   const [createErrors, setCreateErrors] = useState({});
+  const [appointmentOptions, setAppointmentOptions] = useState([]);
+  const [appointmentsLoading, setAppointmentsLoading] = useState(false);
 
   const [itemForm, setItemForm] = useState(EMPTY_ITEM);
   const [itemErrors, setItemErrors] = useState({});
 
   const debounceRef = useRef(null);
 
+  const resolvePatientName = useCallback(
+    (patientId) => patientLookup?.[Number(patientId)] || `Patient #${patientId}`,
+    [patientLookup]
+  );
+
+  const resolveDoctorName = useCallback(
+    (doctorId) => doctorLookup?.[Number(doctorId)] || `Doctor #${doctorId}`,
+    [doctorLookup]
+  );
+
   useEffect(() => { fetchPrescriptions(); }, [fetchPrescriptions]);
+
+  const loadAppointmentOptions = useCallback(async () => {
+    if (!canCreate) return;
+    setAppointmentsLoading(true);
+    try {
+      const response = await fetchAppointmentsAPI();
+      const items = extractCollection(response).map((appointment) =>
+        enrichAppointment(appointment)
+      );
+      setAppointmentOptions(items);
+    } catch (fetchError) {
+      toast.error(
+        fetchError?.response?.data?.message ||
+        fetchError?.message ||
+        'Unable to load appointments.'
+      );
+    } finally {
+      setAppointmentsLoading(false);
+    }
+  }, [canCreate]);
+
+  useEffect(() => {
+    loadAppointmentOptions();
+  }, [loadAppointmentOptions]);
 
   useEffect(() => {
     if (error) {
@@ -647,6 +709,9 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
     setCreateForm(EMPTY_CREATE);
     setCreateErrors({});
     setModal('create');
+    if (!appointmentOptions.length && !appointmentsLoading) {
+      loadAppointmentOptions();
+    }
   };
 
   const openDetail = (rx) => {
@@ -664,7 +729,29 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
   const closeModal = () => {
     setModal(null);
     setNewPrescriptionId(null);
+    setCreateForm(EMPTY_CREATE);
+    setCreateErrors({});
     closePrescription();
+  };
+
+  const handleAppointmentSelect = (value) => {
+    const selected = appointmentOptions.find(
+      (appointment) => Number(appointment.id) === Number(value)
+    );
+
+    setCreateForm((prev) => ({
+      ...prev,
+      appointment_id: value ? String(value) : '',
+      patient_id: selected?.patient_id ? String(selected.patient_id) : '',
+      doctor_id: selected?.doctor_id ? String(selected.doctor_id) : '',
+    }));
+
+    setCreateErrors((prev) => ({
+      ...prev,
+      appointment_id: '',
+      patient_id: '',
+      doctor_id: '',
+    }));
   };
 
   // ── Create step 1 submit ───────────────────────────────────────────────
@@ -714,7 +801,7 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
     };
 
     addItem(data, newPrescriptionId, () => {
-      toast.success('Medicine added! ✅');
+      toast.success('Medicine added successfully.');
       setItemForm(EMPTY_ITEM);
       setItemErrors({});
     });
@@ -723,7 +810,18 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
   // ── Verify ────────────────────────────────────────────────────────────
   const handleVerify = (id, e) => {
     e?.stopPropagation();
-    verify(id, () => { toast.success('Prescription verified ✅'); });
+
+    const targetPrescription =
+      currentPrescription?.id === id
+        ? currentPrescription
+        : prescriptions.find((prescription) => prescription.id === id);
+
+    if (!targetPrescription?.items?.length) {
+      toast.error('No medications found.');
+      return;
+    }
+
+    verify(id, () => { toast.success('Prescription verified successfully.'); });
   };
 
   // ── Dispense ──────────────────────────────────────────────────────────
@@ -772,7 +870,16 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
               $active={statusFilter === s}
               onClick={() => filterByStatus(s)}
             >
-              {s === 'ALL' ? 'All' : STATUS_CONFIG[s]?.icon + ' ' + STATUS_CONFIG[s]?.label || s}
+              {s === 'ALL' ? (
+                'All'
+              ) : STATUS_CONFIG[s] ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  {STATUS_CONFIG[s].icon}
+                  <span>{STATUS_CONFIG[s].label}</span>
+                </span>
+              ) : (
+                s
+              )}
             </FilterBtn>
           ))}
         </FilterGroup>
@@ -787,9 +894,9 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
         <Table>
           <Thead>
             <tr>
-              <Th>#ID</Th>
-              <Th>Patient ID</Th>
-              <Th>Doctor ID</Th>
+              <Th>ID</Th>
+              <Th>Patient</Th>
+              <Th>Doctor</Th>
               <Th>Date</Th>
               <Th>Status</Th>
               <Th>Actions</Th>
@@ -819,25 +926,13 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                     </span>
                   </Td>
                   <Td>
-                    <span style={{
-                      background: theme.colors.background,
-                      padding: '3px 10px',
-                      borderRadius: 6,
-                      fontWeight: 600,
-                      fontSize: 13
-                    }}>
-                      P-{rx.patient_id}
+                    <span style={{ fontWeight: 500 }}>
+                      {resolvePatientName(rx.patient_id)}
                     </span>
                   </Td>
                   <Td>
-                    <span style={{
-                      background: theme.colors.background,
-                      padding: '3px 10px',
-                      borderRadius: 6,
-                      fontWeight: 600,
-                      fontSize: 13
-                    }}>
-                      D-{rx.doctor_id}
+                    <span style={{ fontWeight: 500 }}>
+                      {resolveDoctorName(rx.doctor_id)}
                     </span>
                   </Td>
                   <Td style={{ fontSize: 13, color: theme.colors.textSecondary }}>
@@ -876,7 +971,9 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Tooltip title="Verify prescription">
-                            <ActionBtn $variant="verify" disabled={submitting}>✅</ActionBtn>
+                            <ActionBtn $variant="verify" disabled={submitting}>
+                              <CheckCircle2 size={15} />
+                            </ActionBtn>
                           </Tooltip>
                         </Popconfirm>
                       )}
@@ -891,7 +988,9 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Tooltip title="Dispense medicines">
-                            <ActionBtn $variant="dispense" disabled={submitting}>📦</ActionBtn>
+                            <ActionBtn $variant="dispense" disabled={submitting}>
+                              <Package size={15} />
+                            </ActionBtn>
                           </Tooltip>
                         </Popconfirm>
                       )}
@@ -921,7 +1020,12 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
       <Modal
         open={modal === 'create'}
         onCancel={closeModal}
-        title={<span style={{ fontWeight: 700 }}>📋 New Prescription — Step 1 of 2</span>}
+        title={
+          <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <FileText size={16} />
+            <span>New Prescription — Step 1 of 2</span>
+          </span>
+        }
         footer={null}
         width={520}
         destroyOnClose
@@ -941,16 +1045,35 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
         <ModalForm>
           <FormRow>
             <FormGroup>
+              <FormLabel>Appointment <span className="req">*</span></FormLabel>
+              <Select
+                placeholder={appointmentsLoading ? 'Loading appointments...' : 'Select appointment'}
+                value={createForm.appointment_id || undefined}
+                onChange={handleAppointmentSelect}
+                loading={appointmentsLoading}
+                disabled={appointmentsLoading}
+                showSearch
+                optionFilterProp="label"
+                status={createErrors.appointment_id ? 'error' : undefined}
+                style={{ height: 38 }}
+                options={appointmentOptions.map((appointment) => ({
+                  value: String(appointment.id),
+                  label: `Appointment ID - ${appointment.id}`,
+                }))}
+              />
+              {createErrors.appointment_id && <FieldError>{createErrors.appointment_id}</FieldError>}
+            </FormGroup>
+          </FormRow>
+
+          <FormRow>
+            <FormGroup>
               <FormLabel>Patient ID <span className="req">*</span></FormLabel>
               <FormInput
-                type="number"
-                placeholder="e.g. 12"
                 value={createForm.patient_id}
+                readOnly
+                disabled
+                placeholder="Select an appointment first"
                 $error={!!createErrors.patient_id}
-                onChange={(e) => {
-                  setCreateForm(p => ({ ...p, patient_id: e.target.value }));
-                  if (createErrors.patient_id) setCreateErrors(p => ({ ...p, patient_id: '' }));
-                }}
               />
               {createErrors.patient_id && <FieldError>{createErrors.patient_id}</FieldError>}
             </FormGroup>
@@ -958,33 +1081,15 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
             <FormGroup>
               <FormLabel>Doctor ID <span className="req">*</span></FormLabel>
               <FormInput
-                type="number"
-                placeholder="e.g. 3"
                 value={createForm.doctor_id}
+                readOnly
+                disabled
+                placeholder="Select an appointment first"
                 $error={!!createErrors.doctor_id}
-                onChange={(e) => {
-                  setCreateForm(p => ({ ...p, doctor_id: e.target.value }));
-                  if (createErrors.doctor_id) setCreateErrors(p => ({ ...p, doctor_id: '' }));
-                }}
               />
               {createErrors.doctor_id && <FieldError>{createErrors.doctor_id}</FieldError>}
             </FormGroup>
           </FormRow>
-
-          <FormGroup>
-            <FormLabel>Appointment ID <span className="req">*</span></FormLabel>
-            <FormInput
-              type="number"
-              placeholder="e.g. 7"
-              value={createForm.appointment_id}
-              $error={!!createErrors.appointment_id}
-              onChange={(e) => {
-                setCreateForm(p => ({ ...p, appointment_id: e.target.value }));
-                if (createErrors.appointment_id) setCreateErrors(p => ({ ...p, appointment_id: '' }));
-              }}
-            />
-            {createErrors.appointment_id && <FieldError>{createErrors.appointment_id}</FieldError>}
-          </FormGroup>
 
           <FormGroup>
             <FormLabel>Doctor Notes / Diagnosis <span className="req">*</span></FormLabel>
@@ -1003,7 +1108,12 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
           <ModalFooterBtns>
             <CancelBtn onClick={closeModal}>Cancel</CancelBtn>
             <SubmitBtn onClick={handleCreateSubmit} disabled={submitting}>
-              {submitting ? '⏳ Creating…' : 'Next: Add Medicines →'}
+              {submitting ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <LoaderCircle size={14} />
+                  <span>Creating…</span>
+                </span>
+              ) : 'Next: Add Medicines →'}
             </SubmitBtn>
           </ModalFooterBtns>
         </ModalForm>
@@ -1015,14 +1125,19 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
       <Modal
         open={modal === 'addItem'}
         onCancel={closeModal}
-        title={<span style={{ fontWeight: 700 }}>💊 Add Medicine — Step 2 of 2</span>}
+        title={
+          <span style={{ fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <Pill size={16} />
+            <span>Add Medicine — Step 2 of 2</span>
+          </span>
+        }
         footer={null}
         width={560}
         destroyOnClose
         styles={modalStyles(theme)}
       >
         <StepBanner>
-          <span>📋</span>
+          <InlineIcon><ClipboardList size={16} /></InlineIcon>
           <span>Prescription <PillBadge>#{newPrescriptionId}</PillBadge> created. Add medicines below. You can add multiple.</span>
         </StepBanner>
 
@@ -1135,7 +1250,17 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
           <ModalFooterBtns>
             <CancelBtn onClick={closeModal}>Done (Close)</CancelBtn>
             <SubmitBtn onClick={handleItemSubmit} disabled={submitting}>
-              {submitting ? '⏳ Adding…' : '＋ Add Medicine'}
+              {submitting ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <LoaderCircle size={14} />
+                  <span>Adding…</span>
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Pill size={14} />
+                  <span>Add Medicine</span>
+                </span>
+              )}
             </SubmitBtn>
           </ModalFooterBtns>
         </ModalForm>
@@ -1149,7 +1274,10 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
         onCancel={closeModal}
         title={
           <span style={{ fontWeight: 700 }}>
-            📋 Prescription Details
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <FileText size={16} />
+              <span>Prescription Details</span>
+            </span>
             {currentPrescription && (
               <span style={{ marginLeft: 10 }}>
                 <StatusTag status={currentPrescription.status} />
@@ -1169,7 +1297,10 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                     openAddItem(currentPrescription.id);
                   }}
                 >
-                  💊 Add Medicine
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Pill size={14} />
+                    <span>Add Medicine</span>
+                  </span>
                 </PrimaryBtn>
               )}
 
@@ -1182,7 +1313,10 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                   cancelText="Cancel"
                 >
                   <SubmitBtn style={{ background: 'linear-gradient(135deg,#059669,#10b981)' }}>
-                    ✅ Verify
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <CheckCircle2 size={14} />
+                      <span>Verify</span>
+                    </span>
                   </SubmitBtn>
                 </Popconfirm>
               )}
@@ -1196,7 +1330,10 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                   cancelText="Cancel"
                 >
                   <SubmitBtn style={{ background: 'linear-gradient(135deg,#d97706,#f59e0b)' }}>
-                    📦 Dispense
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <Package size={14} />
+                      <span>Dispense</span>
+                    </span>
                   </SubmitBtn>
                 </Popconfirm>
               )}
@@ -1217,7 +1354,10 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
         ) : currentPrescription ? (
           <>
             <DetailSection>
-              <SectionTitle>📌 Prescription Info</SectionTitle>
+              <SectionTitle>
+                <FileText size={14} />
+                <span>Prescription Info</span>
+              </SectionTitle>
               <InfoGrid>
                 <InfoField>
                   <InfoLabel>Prescription ID</InfoLabel>
@@ -1276,7 +1416,8 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
 
             <DetailSection>
               <SectionTitle>
-                💊 Medicines
+                <Pill size={14} />
+                <span>Medicines</span>
                 {currentPrescription.items?.length > 0 && (
                   <PillBadge>{currentPrescription.items.length}</PillBadge>
                 )}
@@ -1307,7 +1448,10 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
                             <div style={{ fontWeight: 600 }}>{item.medicine || `Med #${item.medicine_id}`}</div>
                             {item.instructions && (
                               <div style={{ fontSize: 11.5, color: theme.colors.textSecondary, marginTop: 2 }}>
-                                📝 {item.instructions}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <NotebookPen size={12} />
+                                  <span>{item.instructions}</span>
+                                </span>
                               </div>
                             )}
                           </ITd>

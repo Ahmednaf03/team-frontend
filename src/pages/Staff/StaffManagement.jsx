@@ -34,12 +34,15 @@ const Page = styled.div`
 
 const PageHeader = styled.div`
   background: ${({ theme }) => theme.colors.surface};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  padding: 16px 0 20px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 16px;
+  padding: 18px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
 `;
 
 const HeaderLeft = styled.div`
@@ -52,7 +55,7 @@ const PageIcon = styled.div`
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+  background: ${({ theme }) => theme.colors.primary};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -75,11 +78,12 @@ const PageSubtitle = styled.p`
 `;
 
 const AddButton = styled.button`
-  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+  background: ${({ theme }) => theme.colors.primary};
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 10px 20px;
+  min-height: 42px;
+  padding: 10px 18px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -87,26 +91,31 @@ const AddButton = styled.button`
   align-items: center;
   gap: 8px;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(14,165,233,0.25);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 
   &:hover {
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(14,165,233,0.35);
+    opacity: 0.92;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.16);
   }
   &:active { transform: translateY(0); }
 
   ${({ disabled }) => disabled && css`
     opacity: 0.6; cursor: not-allowed;
-    &:hover { transform: none; box-shadow: 0 2px 8px rgba(14,165,233,0.25); }
+    &:hover { transform: none; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
   `}
 `;
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
 const Toolbar = styled.div`
-  padding: 16px 0 0;
+  background: ${({ theme }) => theme.colors.surface};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 16px;
+  padding: 14px 16px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
 `;
@@ -114,8 +123,16 @@ const Toolbar = styled.div`
 const SearchWrap = styled.div`
   position: relative;
   flex: 1;
-  min-width: 220px;
-  max-width: 360px;
+  min-width: 280px;
+`;
+
+const ToolbarControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 280px;
+  flex-wrap: wrap;
 `;
 
 const SearchInput = styled.input`
@@ -133,8 +150,8 @@ const SearchInput = styled.input`
 
   &::placeholder { color: ${({ theme }) => theme.colors.textSecondary}; }
   &:focus {
-    border-color: #0ea5e9;
-    box-shadow: 0 0 0 3px rgba(14,165,233,0.12);
+    border-color: ${({ theme }) => theme.colors.primary};
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
   }
 `;
 
@@ -165,21 +182,23 @@ const FilterSelect = styled.select`
   background-position: right 10px center;
   transition: border-color 0.2s;
 
-  &:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.12); }
+  &:focus { border-color: ${({ theme }) => theme.colors.primary}; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
 `;
 
 const StatBadge = styled.div`
-  margin-left: auto;
-  background: ${({ theme }) => theme.colors.surface};
+  min-height: 42px;
+  background: ${({ theme }) => theme.colors.background};
   border: 1.5px solid ${({ theme }) => theme.colors.border};
-  border-radius: 8px;
-  padding: 6px 14px;
+  border-radius: 10px;
+  padding: 0 14px;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.textSecondary};
   font-weight: 500;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 
-  span { color: #0ea5e9; font-weight: 700; }
+  span { color: ${({ theme }) => theme.colors.primary}; font-weight: 700; }
 `;
 
 // ─── Table Card ───────────────────────────────────────────────────────────────
@@ -725,33 +744,35 @@ const StaffManagement = () => {
 
       {/* ── Toolbar ─────────────────────────────────────────────────────────── */}
       <Toolbar>
-        <SearchWrap>
-          <SearchIcon>🔍</SearchIcon>
-          <SearchInput
-            placeholder="Search by name, email or role…"
-            defaultValue={searchQuery}
-            onChange={handleSearch}
-          />
-        </SearchWrap>
+        <ToolbarControls>
+          <SearchWrap>
+            <SearchIcon>🔍</SearchIcon>
+            <SearchInput
+              placeholder="Search by name, email or role…"
+              defaultValue={searchQuery}
+              onChange={handleSearch}
+            />
+          </SearchWrap>
 
-        <FilterSelect
-          value={roleFilter}
-          onChange={(e) => filterByRole(e.target.value)}
-        >
-          <option value="all">All roles</option>
-          {ROLES.map((r) => (
-            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-          ))}
-        </FilterSelect>
+          <FilterSelect
+            value={roleFilter}
+            onChange={(e) => filterByRole(e.target.value)}
+          >
+            <option value="all">All roles</option>
+            {ROLES.map((r) => (
+              <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+            ))}
+          </FilterSelect>
 
-        <FilterSelect
-          value={statusFilter}
-          onChange={(e) => filterByStatus(e.target.value)}
-        >
-          <option value="all">All status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </FilterSelect>
+          <FilterSelect
+            value={statusFilter}
+            onChange={(e) => filterByStatus(e.target.value)}
+          >
+            <option value="all">All status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </FilterSelect>
+        </ToolbarControls>
 
         <StatBadge>
           Total: <span>{total}</span> staff

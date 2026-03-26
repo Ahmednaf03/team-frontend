@@ -19,8 +19,6 @@ const rootReducer = combineReducers({
   staff: staffReducer,
   chat: chatReducer,
   notifications: notificationReducer,
-  // billing: billingReducer,
-  // staff: staffReducer,
 });
 
 export default rootReducer;
