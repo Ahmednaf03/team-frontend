@@ -70,3 +70,15 @@ export const fetchMeAPI = async () => {
   const response = await axiosClient.get('/api/auth/me');
   return response.data;
 };
+
+export const changePasswordAPI = async ({ old_password, new_password }) => {
+  const response = await axiosClient.post(
+    '/change-password',
+    { old_password, new_password },
+    {
+      withCredentials: true,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
+  return response.data;
+};
