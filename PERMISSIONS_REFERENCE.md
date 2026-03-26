@@ -51,6 +51,7 @@ Source: `src/pages/Appointments/appointmentPermissions.js`
 | Create appointment | Yes | Yes | No | Yes |
 | Update or reschedule | Yes | Yes | No | No |
 | Cancel appointment | Yes | Yes | No | No |
+| Mark appointment completed | Yes | Yes | No | No |
 | Delete appointment | Yes | No | No | No |
 | Read patients for dropdown | Yes | Yes | No | Yes |
 | Read doctors for dropdown | Yes | Yes | Yes | Yes |
@@ -76,8 +77,8 @@ Source: `C:\wamp64\www\team-backend\src\routes\patients.php`
 
 | Endpoint | Allowed Roles |
 |---|---|
-| `GET /api/patients` | `admin`, `provider`, `receptionist` |
-| `GET /api/patients/{id}` | `admin`, `provider`, `receptionist` |
+| `GET /api/patients` | `admin`, `provider`, `nurse`, `receptionist` |
+| `GET /api/patients/{id}` | `admin`, `provider`, `nurse`, `receptionist` |
 | `POST /api/patients` | `admin` |
 | `PUT /api/patients/{id}` | `admin` |
 | `DELETE /api/patients/{id}` | `admin` |
@@ -100,7 +101,7 @@ Source: `C:\wamp64\www\team-backend\src\routes\prescriptions.php`
 
 | Endpoint | Allowed Roles |
 |---|---|
-| `GET /api/prescriptions` | `provider`, `admin`, `pharmacist` |
+| `GET /api/prescriptions` | `provider`, `admin`, `pharmacist`, `nurse` |
 | `POST /api/prescriptions` | `provider`, `admin` |
 | `POST /api/prescriptions/items` | `provider`, `admin` |
 | `PATCH /api/prescriptions/verify/{id}` | `pharmacist`, `admin` |
@@ -112,9 +113,9 @@ Source: `C:\wamp64\www\team-backend\src\routes\billing.php`
 
 | Endpoint | Allowed Roles |
 |---|---|
-| `GET /api/billing` | `admin` |
-| `GET /api/billing/summary` | `admin` |
-| `POST /api/billing/{prescriptionId}` | `admin`, `pharmacist` |
+| `GET /api/billing` | `admin`, `provider` |
+| `GET /api/billing/summary` | `admin`, `provider` |
+| `POST /api/billing/{prescriptionId}` | `admin`, `provider`, `pharmacist` |
 | `PATCH /api/billing/{invoiceId}` | `admin` |
 
 ### Dashboard API
@@ -141,9 +142,6 @@ Source: `C:\wamp64\www\team-backend\src\routes\notifications.php`
 
 ## Known Frontend vs Backend Mismatches
 
-- frontend allows nurse on prescriptions page, but backend prescription routes do not
-- frontend allows provider on billing page, but backend billing list and summary are admin-only
-- frontend allows nurse on patients page, but backend `GET /api/patients` is limited to `admin` and `provider`
 - backend allows nurse to create appointments, but frontend blocks it because nurses cannot currently fetch patient dropdown data
 - `/api/appointments/upcoming` currently crashes in the backend for receptionist probe testing despite route access being allowed
 
@@ -154,7 +152,7 @@ If the team needs one practical rule set for the current app behavior, use this:
 | Role | Can view patients | Can manage patients | Can view appointments | Can create appointments | Can update or cancel appointments | Can delete appointments | Can use prescriptions | Can use billing | Can manage staff and settings |
 |---|---|---|---|---|---|---|---|---|---|
 | Admin | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Provider | Yes | No | Yes | Yes | Yes | No | Yes | Frontend yes, backend billing read no | No |
-| Nurse | Frontend yes, backend no | No | Yes | No in frontend, yes in backend | No | No | Frontend yes, backend no | No | No |
+| Provider | Yes | No | Yes | Yes | Yes | No | Yes | Yes | No |
+| Nurse | Yes | No | Yes | No in frontend, yes in backend | No | No | Yes | No | No |
 | Pharmacist | No | No | No | No | No | No | Yes | Partial | No |
 | Receptionist | Yes | No | Yes | Yes | No | No | No | No | No |

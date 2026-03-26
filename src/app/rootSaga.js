@@ -10,8 +10,7 @@ import staffSaga from '../modules/staff/staffSaga';
 import notificationSaga from '../modules/notifications/notificationSaga';
 export default function* rootSaga() {
   yield all([
-     
-    authSaga(),
+     authSaga(),
      appointmentSaga(),
      calendarSaga(),
      chatSaga(),
@@ -19,10 +18,6 @@ export default function* rootSaga() {
     prescriptionSaga(),
     billingSaga(),
     staffSaga(), 
-    // Future sagas plug in here:
-    // tenantSaga(),
-    // patientSaga(),
-
     notificationSaga(),
   ]);
 } 

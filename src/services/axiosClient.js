@@ -12,7 +12,7 @@ const axiosClient = axios.create({
 // 1. REQUEST INTERCEPTOR
 // ==========================================
 axiosClient.interceptors.request.use((config) => {
-  const publicRoutes = ['/login', '/resolve'];
+  const publicRoutes = ['/login', '/resolve', '/patient-login'];
   const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
 
   if (isPublicRoute) {
