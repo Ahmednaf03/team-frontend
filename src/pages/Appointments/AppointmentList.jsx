@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Pagination, Radio, Modal, Spin, Empty, Alert } from 'antd';
+import { Table, Button, Select, DatePicker, Input, Popconfirm, Tooltip, message, Radio, Modal, Spin, Empty, Alert } from 'antd';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   PlusOutlined,
@@ -516,29 +516,6 @@ const AppointmentList = () => {
     [appointments, patientLookup, doctorLookup]
   );
 
-  // Local filtering fallback in case backend only paginates without filtering
-  const filteredAppointments = React.useMemo(() => {
-    return displayAppointments.filter((appt) => {
-      let match = true;
-      if (filters.status) {
-        match = match && appt.status === filters.status;
-      }
-      if (filters.search) {
-        const term = filters.search.toLowerCase();
-        const pName = appt.patient_name?.toLowerCase() || '';
-        const dName = appt.doctor_name?.toLowerCase() || '';
-        match = match && (pName.includes(term) || dName.includes(term));
-      }
-      if (filters.dateFrom && filters.dateTo) {
-         const apptDate = dayjs(appt.scheduled_at);
-         const from = dayjs(filters.dateFrom).startOf('day');
-         const to = dayjs(filters.dateTo).endOf('day');
-         match = match && (apptDate.isAfter(from) || apptDate.isSame(from)) && (apptDate.isBefore(to) || apptDate.isSame(to));
-      }
-      return match;
-    });
-  }, [displayAppointments, filters]);
-
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = [
     {
@@ -701,7 +678,11 @@ const AppointmentList = () => {
           </Radio.Group>
 
           {viewMode === 'list' && (
-            <Button icon={<ReloadOutlined />} onClick={fetchAppointments} loading={loading}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => fetchAppointments({ page: pagination.currentPage, force: true })}
+              loading={loading}
+            >
               Refresh
             </Button>
           )}
@@ -761,14 +742,17 @@ const AppointmentList = () => {
           {/* Table */}
           <TableCard>
             <Table
-              dataSource={filteredAppointments}
+              dataSource={displayAppointments}
               columns={columns}
               rowKey="id"
               loading={loading}
               pagination={{
-                pageSize: 5,
+                current: pagination.currentPage,
+                pageSize: pagination.perPage,
+                total: pagination.totalRecords,
                 showSizeChanger: false,
                 showTotal: (total) => `${total} appointments`,
+                onChange: (page) => goToPage(page),
                 itemRender: (current, type, originalElement) => {
                   if (type === 'prev') {
                     return <Button type="text" size="small">Prev</Button>;

@@ -1,4 +1,4 @@
-import { call, put, takeLatest, takeEvery } from 'redux-saga/effects';
+import { call, put, takeLatest, takeEvery, select } from 'redux-saga/effects';
 import {
   fetchAllPatientsAPI,
   fetchPatientByIdAPI,
@@ -6,11 +6,12 @@ import {
   updatePatientAPI,
   deletePatientAPI,
 } from './patientAPI';
-
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 import {
   fetchPatientsRequest,
   fetchPatientsSuccess,
   fetchPatientsFailure,
+  hydratePatientsFromCache,
   fetchPatientByIdRequest,
   fetchPatientByIdSuccess,
   fetchPatientByIdFailure,
@@ -25,24 +26,89 @@ import {
   deletePatientFailure,
 } from './patientSlice';
 
-// ── Fetch All ────────────────────────────────────────────────────────────────
-function* handleFetchPatients() {
+const applySearch = (patients, searchQuery) => {
+  const q = searchQuery.toLowerCase().trim();
+
+  if (!q) {
+    return patients;
+  }
+
+  return patients.filter(
+    (patient) =>
+      patient.name?.toLowerCase().includes(q) ||
+      patient.phone?.toLowerCase().includes(q) ||
+      patient.diagnosis?.toLowerCase().includes(q) ||
+      patient.gender?.toLowerCase().includes(q)
+  );
+};
+
+const buildFallbackPage = (items, page, pageSize) => {
+  const totalRecords = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startIdx = (page - 1) * pageSize;
+
+  return {
+    data: items.slice(startIdx, startIdx + pageSize),
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalRecords,
+      perPage: pageSize,
+    },
+  };
+};
+
+function* handleFetchPatients(action) {
   try {
-    // API returns envelope: { status: 200, message: null, data: [...patients] }
-    const envelope = yield call(fetchAllPatientsAPI);
-    const patients = envelope.data;
-    yield put(fetchPatientsSuccess(Array.isArray(patients) ? patients : []));
+    const { pagination, searchQuery } = yield select((state) => state.patients);
+    const requestedPage = action.payload?.page ?? pagination.page;
+    const prefetch = Boolean(action.payload?.prefetch);
+    const force = Boolean(action.payload?.force);
+    const queryKey = buildPaginationCacheKey({ search: searchQuery });
+    const cachedPage = yield select(
+      (state) => state.patients.pageCache[queryKey]?.[requestedPage]
+    );
+
+    if (cachedPage && !force) {
+      if (!prefetch) {
+        yield put(hydratePatientsFromCache({ page: requestedPage, queryKey }));
+      }
+      return;
+    }
+
+    const params = {
+      page: requestedPage,
+      per_page: pagination.pageSize,
+      ...(searchQuery && { search: searchQuery }),
+    };
+
+    const envelope = yield call(fetchAllPatientsAPI, params);
+    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
+    const paginatedPayload = envelope?.pagination
+      ? {
+          data: responseData,
+          pagination: envelope.pagination,
+        }
+      : buildFallbackPage(applySearch(responseData, searchQuery), requestedPage, pagination.pageSize);
+
+    yield put(
+      fetchPatientsSuccess({
+        data: paginatedPayload.data,
+        pagination: paginatedPayload.pagination,
+        page: requestedPage,
+        queryKey,
+        prefetch,
+      })
+    );
   } catch (error) {
     const message =
       error.response?.data?.message || 'Failed to fetch patients.';
-    yield put(fetchPatientsFailure(message));
+    yield put(fetchPatientsFailure({ message, prefetch: action.payload?.prefetch }));
   }
 }
 
-// ── Fetch By ID ──────────────────────────────────────────────────────────────
 function* handleFetchPatientById(action) {
   try {
-    // envelope = { status: 200, message: 'Patient fetched successfully', data: { id, name, ... } }
     const envelope = yield call(fetchPatientByIdAPI, action.payload);
     const patient = envelope.data;
     yield put(fetchPatientByIdSuccess(patient));
@@ -53,13 +119,11 @@ function* handleFetchPatientById(action) {
   }
 }
 
-// ── Create ───────────────────────────────────────────────────────────────────
 function* handleCreatePatient(action) {
   try {
-    // envelope = { status: 201, message: 'Patient created successfully', data: <newId> }
     yield call(createPatientAPI, action.payload.data);
     yield put(createPatientSuccess());
-    yield put(fetchPatientsRequest());
+    yield put(fetchPatientsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message =
@@ -68,13 +132,11 @@ function* handleCreatePatient(action) {
   }
 }
 
-// ── Update ───────────────────────────────────────────────────────────────────
 function* handleUpdatePatient(action) {
   try {
-    // envelope = { status: 200, message: 'Patient updated successfully', data: <rowCount> }
     yield call(updatePatientAPI, { id: action.payload.id, data: action.payload.data });
     yield put(updatePatientSuccess());
-    yield put(fetchPatientsRequest());
+    yield put(fetchPatientsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message =
@@ -83,13 +145,11 @@ function* handleUpdatePatient(action) {
   }
 }
 
-// ── Delete ───────────────────────────────────────────────────────────────────
 function* handleDeletePatient(action) {
   try {
-    // envelope = { status: 200, message: 'Patient deleted successfully', data: true }
     yield call(deletePatientAPI, action.payload.id);
     yield put(deletePatientSuccess());
-    yield put(fetchPatientsRequest());
+    yield put(fetchPatientsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message =
@@ -98,7 +158,6 @@ function* handleDeletePatient(action) {
   }
 }
 
-// ── Root Patient Saga ────────────────────────────────────────────────────────
 export default function* patientSaga() {
   yield takeLatest(fetchPatientsRequest.type, handleFetchPatients);
   yield takeLatest(fetchPatientByIdRequest.type, handleFetchPatientById);

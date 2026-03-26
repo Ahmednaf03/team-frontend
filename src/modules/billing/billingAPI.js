@@ -30,7 +30,7 @@ export const fetchBillingSummaryAPI = async () => {
   return response.data;
 };
 
-export const fetchAllInvoicesAPI = async () => {
-  const response = await axiosClient.get('/billing');
+export const fetchAllInvoicesAPI = async (params = {}) => {
+  const response = await axiosClient.get('/billing', { params });
   return response.data;
 };

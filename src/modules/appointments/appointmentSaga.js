@@ -9,11 +9,13 @@ import {
   deleteAppointmentAPI,
 } from './appointmentAPI';
 import { enrichAppointment, extractCollection, unwrapAppointment } from '../../utils/appointmentMapping';
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 import { fetchAppointmentMessagesAPI } from '../chat/chatAPI';
 import {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
   fetchAppointmentsFailure,
+  hydrateAppointmentsFromCache,
   fetchUpcomingRequest,
   fetchUpcomingSuccess,
   fetchUpcomingFailure,
@@ -54,12 +56,26 @@ const resolveLatestThreadNote = async (appointment) => {
 };
 
 // ── Fetch all appointments (with current filters + pagination) ─────────────────
-function* handleFetchAppointments() {
+function* handleFetchAppointments(action) {
   try {
     const { filters, pagination } = yield select((state) => state.appointments);
+    const requestedPage = action.payload?.page ?? pagination.currentPage;
+    const prefetch = Boolean(action.payload?.prefetch);
+    const force = Boolean(action.payload?.force);
+    const queryKey = buildPaginationCacheKey(filters);
+    const cachedPage = yield select(
+      (state) => state.appointments.pageCache[queryKey]?.[requestedPage]
+    );
+
+    if (cachedPage && !force) {
+      if (!prefetch) {
+        yield put(hydrateAppointmentsFromCache({ page: requestedPage, queryKey }));
+      }
+      return;
+    }
 
     const params = {
-      page: pagination.currentPage,
+      page: requestedPage,
       per_page: pagination.perPage,
       ...(filters.status && { status: filters.status }),
       ...(filters.doctorId && { doctor_id: filters.doctorId }),
@@ -95,6 +111,9 @@ function* handleFetchAppointments() {
       fetchAppointmentsSuccess({
         data: hydratedData,
         pagination: responseData.pagination ?? null,
+        page: requestedPage,
+        queryKey,
+        prefetch,
       })
     );
   } catch (error) {
@@ -103,7 +122,7 @@ function* handleFetchAppointments() {
       error.response?.data?.message ||
       error.response?.data?.error ||
       'Failed to fetch appointments.';
-    yield put(fetchAppointmentsFailure(message));
+    yield put(fetchAppointmentsFailure({ message, prefetch: action.payload?.prefetch }));
   }
 }
 

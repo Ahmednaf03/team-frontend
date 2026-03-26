@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchInvoicesRequest,
   fetchSummaryRequest,
@@ -7,33 +7,20 @@ import {
   markPaidRequest,
   setStatusFilter,
   setSearchQuery,
+  nextPage,
+  prevPage,
   setCurrentInvoice,
   clearCurrentInvoice,
   clearError,
 } from '../billingSlice';
+import { buildPaginationCacheKey } from '../../../utils/paginationCache';
 
-/**
- * useBilling()
- *
- * Central hook for all billing operations.
- * Components never touch the slice or API directly.
- *
- * Usage:
- *   const {
- *     invoices, summary, currentInvoice,
- *     loading, submitting, error,
- *     statusFilter, searchQuery,
- *     fetchInvoices, fetchSummary,
- *     generateInvoice, markAsPaid,
- *     filterByStatus, searchInvoices,
- *   } = useBilling();
- */
 export default function useBilling() {
   const dispatch = useDispatch();
 
   const {
     invoices,
-    filtered,
+    pageCache,
     summary,
     currentInvoice,
     loading,
@@ -42,12 +29,33 @@ export default function useBilling() {
     error,
     statusFilter,
     searchQuery,
+    pagination,
   } = useSelector((state) => state.billing);
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  const { page, pageSize, total, totalPages, hasNext, hasPrev } = pagination;
 
-  const fetchInvoices = useCallback(() => {
-    dispatch(fetchInvoicesRequest());
+  const cacheKey = useMemo(
+    () =>
+      buildPaginationCacheKey({
+        search: searchQuery,
+        status: statusFilter,
+      }),
+    [searchQuery, statusFilter]
+  );
+  const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
+
+  useEffect(() => {
+    const next = page + 1;
+
+    if (!totalPages || next > totalPages || cachedPages[next]) {
+      return;
+    }
+
+    dispatch(fetchInvoicesRequest({ page: next, prefetch: true }));
+  }, [cachedPages, dispatch, page, totalPages]);
+
+  const fetchInvoices = useCallback((options = {}) => {
+    dispatch(fetchInvoicesRequest(options));
   }, [dispatch]);
 
   const fetchSummary = useCallback(() => {
@@ -67,14 +75,38 @@ export default function useBilling() {
   );
 
   const filterByStatus = useCallback(
-    (status) => dispatch(setStatusFilter(status)),
+    (status) => {
+      dispatch(setStatusFilter(status));
+      dispatch(fetchInvoicesRequest({ page: 1 }));
+    },
     [dispatch]
   );
 
   const searchInvoices = useCallback(
-    (query) => dispatch(setSearchQuery(query)),
+    (query) => {
+      dispatch(setSearchQuery(query));
+      dispatch(fetchInvoicesRequest({ page: 1 }));
+    },
     [dispatch]
   );
+
+  const goNext = useCallback(() => {
+    if (!hasNext) {
+      return;
+    }
+
+    dispatch(nextPage());
+    dispatch(fetchInvoicesRequest({ page: page + 1 }));
+  }, [dispatch, hasNext, page]);
+
+  const goPrev = useCallback(() => {
+    if (!hasPrev) {
+      return;
+    }
+
+    dispatch(prevPage());
+    dispatch(fetchInvoicesRequest({ page: page - 1 }));
+  }, [dispatch, hasPrev, page]);
 
   const selectInvoice = useCallback(
     (invoice) => dispatch(setCurrentInvoice(invoice)),
@@ -89,26 +121,30 @@ export default function useBilling() {
   const dismissError = useCallback(() => dispatch(clearError()), [dispatch]);
 
   return {
-    // data
-    invoices: filtered,
+    invoices,
     allInvoices: invoices,
     summary,
     currentInvoice,
-    // status
     loading,
     summaryLoading,
     submitting,
     error,
-    // filters
     statusFilter,
     searchQuery,
-    // actions
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNext,
+    hasPrev,
     fetchInvoices,
     fetchSummary,
     generateInvoice,
     markAsPaid,
     filterByStatus,
     searchInvoices,
+    goNext,
+    goPrev,
     selectInvoice,
     clearInvoice,
     dismissError,

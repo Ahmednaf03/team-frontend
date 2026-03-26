@@ -17,8 +17,8 @@ import axiosClient from '../../services/axiosClient';
  */
 
 // ── Fetch All ─────────────────────────────────────────────────────────────────
-export const fetchAllPrescriptionsAPI = async () => {
-  const response = await axiosClient.get('/prescriptions');
+export const fetchAllPrescriptionsAPI = async (params = {}) => {
+  const response = await axiosClient.get('/prescriptions', { params });
   return response.data; // { status, message, data: [...prescriptions] }
 };
 

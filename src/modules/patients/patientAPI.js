@@ -21,9 +21,9 @@ import axiosClient from '../../services/axiosClient';
  *   DELETE /api/patients/{id}   → soft delete (admin only)
  */
 
-export const fetchAllPatientsAPI = async () => {
+export const fetchAllPatientsAPI = async (params = {}) => {
   // response.data = { status: 200, message: null, data: [...patients] }
-  const response = await axiosClient.get('/patients');
+  const response = await axiosClient.get('/patients', { params });
   return response.data; // return envelope: { status, message, data }
 };
 

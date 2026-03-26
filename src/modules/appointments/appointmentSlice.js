@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 
 /**
  * appointmentSlice
@@ -19,11 +20,15 @@ const initialState = {
   list: [],
   upcoming: [],
   selected: null,
+  pageCache: {},
+  paginationMetaByQuery: {},
   pagination: {
     currentPage: 1,
     totalPages: 1,
     totalRecords: 0,
     perPage: 5,
+    hasNext: false,
+    hasPrev: false,
   },
   filters: {
     status: '',
@@ -39,24 +44,89 @@ const initialState = {
   success: null,
 };
 
+const buildPaginationState = (meta, currentPage, fallbackPerPage) => {
+  const totalPages = Number(meta?.totalPages) || 1;
+  const perPage = Number(meta?.perPage) || fallbackPerPage || 5;
+  const totalRecords = Number(meta?.totalRecords) || 0;
+
+  return {
+    currentPage,
+    totalPages,
+    totalRecords,
+    perPage,
+    hasNext: currentPage < totalPages,
+    hasPrev: currentPage > 1,
+  };
+};
+
+const syncCachedPage = (state, page, queryKey) => {
+  const cachedPage = state.pageCache[queryKey]?.[page];
+  const meta = state.paginationMetaByQuery[queryKey];
+
+  if (!cachedPage || !meta) {
+    return;
+  }
+
+  state.list = cachedPage;
+  state.pagination = buildPaginationState(
+    meta,
+    page,
+    state.pagination.perPage
+  );
+};
+
 const appointmentSlice = createSlice({
   name: 'appointments',
   initialState,
   reducers: {
     // ── Fetch list ──────────────────────────────────────────────────────────
-    fetchAppointmentsRequest: (state) => {
+    fetchAppointmentsRequest: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = true;
       state.error = null;
     },
     fetchAppointmentsSuccess: (state, action) => {
-      const { data, pagination } = action.payload;
+      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
+      }
+
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+        totalRecords: pagination?.totalRecords ?? state.pagination.totalRecords,
+        perPage: pagination?.perPage ?? state.pagination.perPage,
+      };
+
+      if (prefetch) {
+        return;
+      }
+
       state.list = data;
-      state.pagination = pagination ?? state.pagination;
+      state.pagination = buildPaginationState(
+        pagination,
+        page,
+        state.pagination.perPage
+      );
       state.loading = false;
     },
     fetchAppointmentsFailure: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.error = action.payload;
+      state.error = action.payload?.message ?? action.payload;
+    },
+    hydrateAppointmentsFromCache: (state, action) => {
+      const { page, queryKey } = action.payload;
+      syncCachedPage(state, page, queryKey);
+      state.loading = false;
+      state.error = null;
     },
 
     // ── Fetch upcoming ──────────────────────────────────────────────────────
@@ -96,6 +166,8 @@ const appointmentSlice = createSlice({
     },
     createAppointmentSuccess: (state, action) => {
       state.actionLoading = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
       state.success = typeof action.payload === 'string'
         ? action.payload
         : 'Appointment created successfully.';
@@ -113,6 +185,8 @@ const appointmentSlice = createSlice({
     },
     updateAppointmentSuccess: (state, action) => {
       state.actionLoading = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
       state.success = typeof action.payload === 'string' 
         ? action.payload 
         : 'Appointment updated successfully.';
@@ -130,6 +204,8 @@ const appointmentSlice = createSlice({
     },
     cancelAppointmentSuccess: (state, action) => {
       state.actionLoading = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
       state.success = typeof action.payload === 'string'
         ? action.payload
         : 'Appointment cancelled.';
@@ -147,6 +223,8 @@ const appointmentSlice = createSlice({
     },
     deleteAppointmentSuccess: (state, action) => {
       state.list = state.list.filter((appt) => appt.id !== action.payload);
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
       state.actionLoading = false;
       state.success = 'Appointment deleted.';
     },
@@ -169,6 +247,8 @@ const appointmentSlice = createSlice({
     },
     setPage: (state, action) => {
       state.pagination.currentPage = action.payload;
+      const queryKey = buildPaginationCacheKey(state.filters);
+      syncCachedPage(state, action.payload, queryKey);
     },
     clearMessages: (state) => {
       state.error = null;
@@ -202,6 +282,7 @@ export const {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
   fetchAppointmentsFailure,
+  hydrateAppointmentsFromCache,
   fetchUpcomingRequest,
   fetchUpcomingSuccess,
   fetchUpcomingFailure,

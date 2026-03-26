@@ -17,8 +17,8 @@ import axiosClient from '../../services/axiosClient';
  * filtered by role. Password is required on create, optional on update.
  */
 
-export const fetchAllStaffAPI = async () => {
-  const response = await axiosClient.get('/staff');
+export const fetchAllStaffAPI = async (params = {}) => {
+  const response = await axiosClient.get('/staff', { params });
   return response.data; // { status, message, data: [...staff] }
 };
 

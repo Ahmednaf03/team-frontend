@@ -604,7 +604,7 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
 
   const {
     prescriptions, currentPrescription, loading, detailLoading, submitting,
-    error, searchQuery, statusFilter, page, totalPages, total, hasNext, hasPrev,
+    error, searchQuery, statusFilter, page, pageSize, totalPages, total, hasNext, hasPrev,
     fetchPrescriptions, openPrescription, closePrescription,
     createPrescription, addItem, verify, dispense,
     searchPrescriptions, filterByStatus,
@@ -732,8 +732,8 @@ const canDispense = ['pharmacist', 'admin'].includes(role);
     dispense(id, () => { toast.success('Prescription dispensed 💊 Stock updated!'); });
   };
 
-  const pStart = (page - 1) * 8 + 1;
-  const pEnd = Math.min(page * 8, total);
+  const pStart = total > 0 ? (page - 1) * pageSize + 1 : 0;
+  const pEnd = Math.min(page * pageSize, total);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (

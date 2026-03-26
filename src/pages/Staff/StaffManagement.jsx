@@ -588,7 +588,7 @@ const StaffManagement = () => {
   const {
     staff, total, loading, submitting, error,
     searchQuery, roleFilter, statusFilter,
-    page, totalPages, hasNext, hasPrev,
+    page, pageSize, totalPages, hasNext, hasPrev,
     fetchStaff, createStaff, updateStaff, deleteStaff,
     searchStaff, filterByRole, filterByStatus,
     goNext, goPrev, dismissError,
@@ -702,8 +702,7 @@ const StaffManagement = () => {
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  const pageSize = 5;
-  const startIdx = (page - 1) * pageSize + 1;
+  const startIdx = total > 0 ? (page - 1) * pageSize + 1 : 0;
   const endIdx   = Math.min(page * pageSize, total);
 
   return (

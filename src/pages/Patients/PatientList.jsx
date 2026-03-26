@@ -594,7 +594,7 @@ const PatientList = () => {
 
   const {
     patients, total, loading, submitting, error,
-    searchQuery, page, totalPages, hasNext, hasPrev,
+    searchQuery, page, pageSize, totalPages, hasNext, hasPrev,
     fetchPatients, createPatient, updatePatient, deletePatient,
     searchPatients, goNext, goPrev, dismissError,
   } = usePatients();
@@ -697,8 +697,8 @@ const PatientList = () => {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
-  const startIdx = (page - 1) * (total > 0 ? Math.ceil(total / totalPages) : 8) + 1;
-  const endIdx = Math.min(page * 8, total);
+  const startIdx = total > 0 ? (page - 1) * pageSize + 1 : 0;
+  const endIdx = Math.min(page * pageSize, total);
 
   return (
     <Page>
