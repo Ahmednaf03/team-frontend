@@ -1,7 +1,7 @@
-import { all, call, put, takeLatest, select, race, delay } from 'redux-saga/effects';
+import { call, put, takeLatest, select, race, delay } from 'redux-saga/effects';
 import { enrichAppointment } from '../../utils/appointmentMapping';
 import { fetchCalendarDataAPI, rescheduleAppointmentAPI } from './calendarAPI';
-import { fetchAppointmentMessagesAPI } from '../chat/chatAPI';
+import { fetchAppointmentMessageSummariesAPI } from '../chat/chatAPI';
 import {
   fetchCalendarDataRequest,
   fetchCalendarDataSuccess,
@@ -23,28 +23,31 @@ const extractMessages = (payload) => {
   return Array.isArray(data) ? data : [];
 };
 
-const resolveLatestThreadNote = async (appointment) => {
-  try {
-    const response = await fetchAppointmentMessagesAPI(appointment.id);
-    const messages = extractMessages(response);
-    const latestMessage = messages[messages.length - 1];
+const buildLatestNotesMap = (payload) =>
+  extractMessages(payload).reduce((acc, item) => {
+    const appointmentId = Number(item?.appointment_id);
+    const latestMessage = item?.latest_message;
 
-    return latestMessage?.message
-      ? { appointmentId: appointment.id, notes: latestMessage.message }
-      : null;
-  } catch (error) {
-    return null;
-  }
-};
+    if (Number.isFinite(appointmentId) && typeof latestMessage === 'string') {
+      acc[appointmentId] = latestMessage;
+    }
+
+    return acc;
+  }, {});
 
 // ── Fetch calendar data ───────────────────────────────────────────────────────
 function* handleFetchCalendarData() {
   try {
     const { selectedDoctor } = yield select((state) => state.calendar);
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
 
     const params = {
       per_page: 200, // get all for calendar view
-      ...(selectedDoctor && { doctor_id: selectedDoctor }),
+      ...((isProvider ? currentUser?.id : selectedDoctor) && {
+        doctor_id: isProvider ? currentUser.id : selectedDoctor,
+      }),
     };
 
     // race() — timeout after 10 seconds
@@ -60,22 +63,23 @@ function* handleFetchCalendarData() {
 
     const raw = response.data ?? response;
     const enriched = Array.isArray(raw) ? raw.map(enrichAppointment) : [];
-    const latestNotesByAppointment = yield all(
-      enriched.map((appointment) => call(resolveLatestThreadNote, appointment))
-    );
-    const latestNotesMap = latestNotesByAppointment.reduce((acc, entry) => {
-      if (entry?.appointmentId && typeof entry.notes === 'string') {
-        acc[entry.appointmentId] = entry.notes;
-      }
-      return acc;
-    }, {});
+    const appointmentIds = enriched.map((appointment) => appointment.id).filter(Boolean);
+    const latestNotesResponse = appointmentIds.length
+      ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
+      : { data: [] };
+    const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
     const hydrated = enriched.map((appointment) =>
       Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
         ? { ...appointment, notes: latestNotesMap[appointment.id] }
         : appointment
     );
+    const scoped = isProvider
+      ? hydrated.filter(
+          (appointment) => Number(appointment.doctor_id) === Number(currentUser?.id)
+        )
+      : hydrated;
 
-    yield put(fetchCalendarDataSuccess(hydrated));
+    yield put(fetchCalendarDataSuccess(scoped));
   } catch (error) {
     const message =
       error.response?.data?.message || 'Failed to load calendar data.';

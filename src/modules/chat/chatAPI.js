@@ -10,6 +10,18 @@ export const fetchAppointmentMessagesAPI = async (appointmentId) => {
   return response.data;
 };
 
+export const fetchAppointmentMessageSummariesAPI = async (appointmentIds = []) => {
+  const params = Array.isArray(appointmentIds) && appointmentIds.length > 0
+    ? { appointment_ids: appointmentIds.join(',') }
+    : {};
+
+  const response = await axiosClient.get('/messages', {
+    ...requestConfig,
+    params,
+  });
+  return response.data;
+};
+
 export const sendAppointmentMessageAPI = async (appointmentId, payload) => {
   const response = await axiosClient.post(`/messages/${appointmentId}`, payload, requestConfig);
   return response.data;

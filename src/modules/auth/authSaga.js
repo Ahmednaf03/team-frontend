@@ -1,6 +1,6 @@
 import { call, put, takeLatest } from 'redux-saga/effects';
-import { jwtDecode } from 'jwt-decode'; // <-- 1. Import this!
-import { loginAPI, logoutAPI, refreshTokenAPI } from './authAPI';
+import { jwtDecode } from 'jwt-decode';
+import { loginAPI, logoutAPI, refreshTokenAPI, changePasswordAPI } from './authAPI';
 import {
   loginRequest,
   loginSuccess,
@@ -8,6 +8,9 @@ import {
   logoutRequest,
   logoutSuccess,
   sessionCheckComplete,
+  changePasswordRequest,
+  changePasswordSuccess,
+  changePasswordFailure,
 } from './authSlice';
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -22,7 +25,7 @@ function* handleLogin(action) {
     const decodedToken = jwtDecode(access_token);
     const user = {
       id: decodedToken.user_id,
-      role: decodedToken.role, // e.g., "admin"
+      role: decodedToken.role,
       tenant_id: decodedToken.tenant_id
     };
 
@@ -119,9 +122,25 @@ function* handleSessionCheck() {
   }
 }
 
+// ─── Change Password ──────────────────────────────────────────────────────────
+function* handleChangePassword(action) {
+  try {
+    const { old_password, new_password } = action.payload;
+    yield call(changePasswordAPI, { old_password, new_password });
+    yield put(changePasswordSuccess());
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      'Failed to change password. Please try again.';
+    yield put(changePasswordFailure(message));
+  }
+}
+
 // ─── Root Auth Saga ───────────────────────────────────────────────────────────
 export default function* authSaga() {
   yield takeLatest(loginRequest.type, handleLogin);
   yield takeLatest(logoutRequest.type, handleLogout);
   yield takeLatest('auth/sessionCheck', handleSessionCheck);
+  yield takeLatest(changePasswordRequest.type, handleChangePassword);
 }

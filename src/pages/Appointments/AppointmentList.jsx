@@ -90,6 +90,9 @@ const SendGlyph = () => (
   </span>
 );
 
+const getAppointmentStatusLabel = (status) =>
+  String(status || '').toLowerCase() === 'completed' ? 'Confirmed' : status;
+
 const roleLabel = (role) => {
   const normalized = String(role || '').toLowerCase();
   if (!normalized) return '';
@@ -419,7 +422,9 @@ const AppointmentList = () => {
   const [chatOpen, setChatOpen] = React.useState(false);
   const [chatAppointment, setChatAppointment] = React.useState(null);
   const [expandedStatusActionsId, setExpandedStatusActionsId] = React.useState(null);
-  const canUseInternalChat = ['provider', 'nurse'].includes(String(userRole || '').toLowerCase());
+  const normalizedUserRole = String(userRole || '').toLowerCase();
+  const isAdmin = normalizedUserRole === 'admin';
+  const canUseInternalChat = !isAdmin && ['provider', 'nurse'].includes(normalizedUserRole);
 
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -542,11 +547,11 @@ const AppointmentList = () => {
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = [
     {
-      title: '#',
+      title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 60,
-      render: (id) => <span style={{ color: '#8c8c8c', fontSize: 12 }}>#{id}</span>,
+      render: (id) => <span style={{ color: '#8c8c8c', fontSize: 12 }}>{id}</span>,
     },
     {
       title: 'Patient',
@@ -570,7 +575,9 @@ const AppointmentList = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => <StatusBadge $status={status}>{status}</StatusBadge>,
+      render: (status) => (
+        <StatusBadge $status={status}>{getAppointmentStatusLabel(status)}</StatusBadge>
+      ),
     },
     {
       title: 'Notes',
@@ -617,9 +624,9 @@ const AppointmentList = () => {
             expandedStatusActionsId === record.id ? (
               <>
                 {permissions.canCompleteAppointments && (
-                  <Tooltip title="Mark completed">
+                  <Tooltip title="Mark confirmed">
                     <Popconfirm
-                      title="Mark this appointment as completed?"
+                      title="Mark this appointment as confirmed?"
                       okText="Yes"
                       cancelText="No"
                       onConfirm={() => handleMarkCompleted(record)}
@@ -732,7 +739,7 @@ const AppointmentList = () => {
               onChange={handleStatusChange}
             >
               <Option value="scheduled">Scheduled</Option>
-              <Option value="completed">Completed</Option>
+              <Option value="completed">Confirmed</Option>
               <Option value="cancelled">Cancelled</Option>
             </Select>
 
@@ -789,11 +796,13 @@ const AppointmentList = () => {
       )}
 
       {/* ── Create / Edit modal ── */}
-      <AppointmentFormModal
-        open={modalOpen}
-        onClose={closeModal}
-        editingAppointment={editingAppointment}
-      />
+      {modalOpen && (
+        <AppointmentFormModal
+          open={modalOpen}
+          onClose={closeModal}
+          editingAppointment={editingAppointment}
+        />
+      )}
       <AppointmentChatInlineModal
         open={chatOpen}
         onClose={closeChatModal}

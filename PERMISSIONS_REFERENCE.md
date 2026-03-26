@@ -36,10 +36,10 @@ Source: `src/routes/AppRouter.jsx`
 | Dashboard | Yes | Yes | Yes | Yes | Yes |
 | Patients page | Yes | Yes | Yes | Yes | No |
 | Appointments page | Yes | Yes | Yes | Yes | No |
-| Prescriptions page | Yes | Yes | Yes | No | Yes |
-| Billing page | Yes | Yes | No | No | No |
+| Prescriptions page | No | Yes | Yes | No | Yes |
+| Billing page | Yes | Yes | No | No | Yes |
 | Staff page | Yes | No | No | No | No |
-| Settings page | Yes | No | No | No | No |
+| Settings page | Yes | Yes | Yes | Yes | Yes |
 
 ## Frontend Appointment UI Actions
 
@@ -48,12 +48,12 @@ Source: `src/pages/Appointments/appointmentPermissions.js`
 | Appointment Action | Admin | Provider | Nurse | Receptionist |
 |---|---|---|---|---|
 | View appointments UI | Yes | Yes | Yes | Yes |
-| Create appointment | Yes | Yes | No | Yes |
+| Create appointment | Yes | Yes | Yes | Yes |
 | Update or reschedule | Yes | Yes | No | No |
 | Cancel appointment | Yes | Yes | No | No |
 | Mark appointment completed | Yes | Yes | No | No |
 | Delete appointment | Yes | No | No | No |
-| Read patients for dropdown | Yes | Yes | No | Yes |
+| Read patients for dropdown | Yes | Yes | Yes | Yes |
 | Read doctors for dropdown | Yes | Yes | Yes | Yes |
 
 ## Backend Route Permissions
@@ -135,14 +135,23 @@ Source: `C:\wamp64\www\team-backend\src\routes\notifications.php`
 
 | Endpoint | Allowed Roles |
 |---|---|
-| `GET /api/notifications` | `admin`, `provider`, `pharmacist`, `receptionist`, `staff`, `patient` |
-| `PATCH /api/notifications/read/{id}` | `admin`, `provider`, `pharmacist`, `receptionist`, `staff`, `patient` |
-| `PATCH /api/notifications/read-all` | `admin`, `provider`, `pharmacist`, `receptionist`, `staff`, `patient` |
-| `DELETE /api/notifications` | `admin`, `provider`, `pharmacist`, `staff`, `patient` |
+| `GET /api/notifications` | `admin`, `provider`, `nurse`, `pharmacist`, `receptionist`, `staff`, `patient` |
+| `PATCH /api/notifications/read/{id}` | `admin`, `provider`, `nurse`, `pharmacist`, `receptionist`, `staff`, `patient` |
+| `PATCH /api/notifications/read-all` | `admin`, `provider`, `nurse`, `pharmacist`, `receptionist`, `staff`, `patient` |
+| `DELETE /api/notifications` | `admin`, `provider`, `nurse`, `pharmacist`, `staff`, `patient` |
+
+### Settings / Security
+
+Source: `src/routes/AppRouter.jsx`
+
+| Frontend Route | Allowed Roles |
+|---|---|
+| `/settings/users` | `Admin` |
+| `/settings/security` | `Admin`, `Provider`, `Nurse`, `Receptionist`, `Pharmacist` |
 
 ## Known Frontend vs Backend Mismatches
 
-- backend allows nurse to create appointments, but frontend blocks it because nurses cannot currently fetch patient dropdown data
+- frontend now allows pharmacist to open Billing, but backend billing read routes in this reference still show `GET /api/billing` and `GET /api/billing/summary` as `admin`, `provider` only
 - `/api/appointments/upcoming` currently crashes in the backend for receptionist probe testing despite route access being allowed
 
 ## Recommended Working Reference
@@ -151,8 +160,8 @@ If the team needs one practical rule set for the current app behavior, use this:
 
 | Role | Can view patients | Can manage patients | Can view appointments | Can create appointments | Can update or cancel appointments | Can delete appointments | Can use prescriptions | Can use billing | Can manage staff and settings |
 |---|---|---|---|---|---|---|---|---|---|
-| Admin | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Provider | Yes | No | Yes | Yes | Yes | No | Yes | Yes | No |
-| Nurse | Yes | No | Yes | No in frontend, yes in backend | No | No | Yes | No | No |
-| Pharmacist | No | No | No | No | No | No | Yes | Partial | No |
-| Receptionist | Yes | No | Yes | Yes | No | No | No | No | No |
+| Admin | Yes | Yes | Yes | Yes | Yes | Yes | No | Yes | Yes |
+| Provider | Yes | No | Yes, own appointments/notifications only | Yes | Yes | No | Yes | Yes | Security settings only |
+| Nurse | Yes | Add only in frontend; backend POST must allow it to work | Yes | Yes | No | No | Yes | No | Security settings only |
+| Pharmacist | No | No | No | No | No | No | Yes | Yes in frontend, backend read access must match | Security settings only |
+| Receptionist | Yes | Add only in frontend; backend POST must allow it to work | Yes | Yes | No | No | No | No | Security settings only |

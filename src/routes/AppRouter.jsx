@@ -129,16 +129,16 @@ export default function AppRouter({ tenantConfig }) {
               <Route
                 element={
                   <RoleBasedRoute
-                    roles={['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']}
+                    roles={['Provider', 'Nurse', 'Receptionist', 'Pharmacist']}
                   />
                 }
               >
                 <Route path="/prescriptions" element={<Prescriptions />} />
               </Route>
 
-              {/* Billing — Admin, Provider */}
+              {/* Billing — Admin, Provider, Pharmacist */}
               <Route
-                element={<RoleBasedRoute roles={['Admin', 'Provider']} />}
+                element={<RoleBasedRoute roles={['Admin', 'Provider', 'Pharmacist']} />}
               >
                 <Route path="/billing" element={<InvoicePage />} />
               </Route>
@@ -148,9 +148,18 @@ export default function AppRouter({ tenantConfig }) {
                 <Route path="/staff" element={<StaffManagement />} />
               </Route>
 
-              {/* Settings — Admin only */}
+              {/* Settings */}
               <Route element={<RoleBasedRoute roles={['Admin']} />}>
                 <Route path="/settings/users" element={<UserManagement />} />
+              </Route>
+
+              <Route
+                element={
+                  <RoleBasedRoute
+                    roles={['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']}
+                  />
+                }
+              >
                 <Route path="/settings/security" element={<SecuritySettings />} />
               </Route>
 

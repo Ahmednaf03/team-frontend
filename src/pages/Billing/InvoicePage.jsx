@@ -16,6 +16,7 @@ import {
   FileText,
 } from 'lucide-react';
 import useBilling from '../../modules/billing/hooks/useBilling';
+import useAppointmentReferenceData from '../Appointments/useAppointmentReferenceData';
 
 // ─── Animations ───────────────────────────────────────────────────────────────
 
@@ -487,7 +488,8 @@ const formatDate = (dateStr) => {
 
 const InvoicePage = () => {
   const userRole = useSelector((state) => state.auth.user?.role);
-  const canMarkPaid = userRole === 'admin' || userRole === 'Admin';
+  const canMarkPaid = false;
+  const { patientLookup } = useAppointmentReferenceData();
   const {
     invoices,
     summary,
@@ -534,6 +536,11 @@ const InvoicePage = () => {
   const handleMarkPaid = (invoiceId) => {
     markAsPaid(invoiceId);
   };
+
+  const resolvePatientName = (invoice) =>
+    invoice.patient_name ||
+    patientLookup?.[invoice.patient_id] ||
+    `Patient #${invoice.patient_id ?? '—'}`;
 
   return (
     <Page>
@@ -630,7 +637,7 @@ const InvoicePage = () => {
         <Table>
           <Thead>
             <tr>
-              <Th>Invoice #</Th>
+              <Th>Invoice</Th>
               <Th>Patient</Th>
               <Th>Prescription ID</Th>
               <Th>Amount</Th>
@@ -677,8 +684,8 @@ const InvoicePage = () => {
             ) : (
               paginated.map((inv) => (
                 <Tr key={inv.id}>
-                  <Td><InvoiceId>#{inv.id}</InvoiceId></Td>
-                  <Td>{inv.patient_name || `Patient #${inv.patient_id}`}</Td>
+                  <Td><InvoiceId>{inv.id}</InvoiceId></Td>
+                  <Td>{resolvePatientName(inv)}</Td>
                   <Td><InvoiceId>RX-{inv.prescription_id}</InvoiceId></Td>
                   <Td><Amount>{formatCurrency(inv.total_amount)}</Amount></Td>
                   <Td>

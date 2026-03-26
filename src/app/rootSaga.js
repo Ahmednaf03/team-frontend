@@ -10,7 +10,8 @@ import staffSaga from '../modules/staff/staffSaga';
 import notificationSaga from '../modules/notifications/notificationSaga';
 export default function* rootSaga() {
   yield all([
-     authSaga(),
+     
+    authSaga(),
      appointmentSaga(),
      calendarSaga(),
      chatSaga(),

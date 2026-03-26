@@ -45,10 +45,51 @@ export const FilterLabel = styled.span`
 
 // ── Table card wrapper ────────────────────────────────────────────────────────
 export const TableCard = styled.div`
-  background: ${({ theme }) => theme.colors.surface};
+  background: ${({ theme }) =>
+    theme.colors.background === '#0f172a' ? '#182235' : theme.colors.surface};
   border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: 12px;
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+
+  .ant-table {
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text};
+  }
+
+  .ant-table-container {
+    background: transparent;
+  }
+
+  .ant-table-thead > tr > th {
+    background: ${({ theme }) =>
+      theme.colors.background === '#0f172a' ? '#141d2d' : theme.colors.background};
+    color: ${({ theme }) => theme.colors.textSecondary};
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  }
+
+  .ant-table-tbody > tr > td {
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text};
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  }
+
+  .ant-table-tbody > tr:hover > td {
+    background: ${({ theme }) =>
+      theme.colors.background === '#0f172a' ? '#131c2d' : theme.colors.background} !important;
+  }
+
+  .ant-table-placeholder .ant-table-cell {
+    background: transparent !important;
+  }
+
+  .ant-pagination {
+    margin: 16px 18px !important;
+  }
 `;
 
 // ── Status badge ──────────────────────────────────────────────────────────────

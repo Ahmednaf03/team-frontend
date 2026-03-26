@@ -64,7 +64,8 @@ const NavItem = styled(NavLink)`
   justify-content: ${(props) => (props.$collapsed ? 'center' : 'flex-start')};
 
   &:hover {
-    background-color: ${(props) => props.theme.colors.sidebarHover};
+    background-color: ${(props) => `${props.theme.colors.primary}22`};
+    color: ${(props) => props.theme.colors.sidebarTextHover || props.theme.colors.primary};
   }
 
   &.active {
@@ -140,14 +141,14 @@ const Sidebar = () => {
         </NavItem>
       )}
 
-      {hasAccess(['Admin', 'Provider', 'Nurse', 'Pharmacist']) && (
+      {hasAccess(['Provider', 'Nurse', 'Pharmacist']) && (
         <NavItem to="/prescriptions" $collapsed={isCollapsed}>
           <NotebookIcon size={20} />
           <NavLabel $collapsed={isCollapsed}>Prescriptions</NavLabel>
         </NavItem>
       )}
 
-      {hasAccess(['Admin', 'Provider']) && (
+      {hasAccess(['Admin', 'Provider', 'Pharmacist']) && (
         <NavItem to="/billing" $collapsed={isCollapsed}>
           <ReceiptIcon size={20} />
           <NavLabel $collapsed={isCollapsed}>Billing</NavLabel>
@@ -161,8 +162,8 @@ const Sidebar = () => {
         </NavItem>
       )}
 
-      {hasAccess(['Admin']) && (
-        <NavItem to="/settings/users" $collapsed={isCollapsed}>
+      {hasAccess(['Admin', 'Provider', 'Nurse', 'Receptionist', 'Pharmacist']) && (
+        <NavItem to="/settings/security" $collapsed={isCollapsed}>
           <Settings size={20} />
           <NavLabel $collapsed={isCollapsed}>Settings</NavLabel>
         </NavItem>

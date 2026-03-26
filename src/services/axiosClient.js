@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { addOfflineRequest } from './offlineSyncDB';
 
 const currentHostname = window.location.hostname; 
-const dynamicBaseUrl = `http://${currentHostname}/api`; //cors
+const dynamicBaseUrl = `http://${currentHostname}/team-backend/api`; //cors
 
 const axiosClient = axios.create({
   baseURL: dynamicBaseUrl,
@@ -11,7 +12,17 @@ const axiosClient = axios.create({
 // ==========================================
 // 1. REQUEST INTERCEPTOR
 // ==========================================
-axiosClient.interceptors.request.use((config) => {
+axiosClient.interceptors.request.use(async (config) => {
+  // --- OFFLINE SYNC INTERCEPTION ---
+  if (!navigator.onLine) {
+    const method = config.method?.toLowerCase();
+    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      await addOfflineRequest(config);
+      return Promise.reject(new Error('OFFLINE_QUEUED'));
+    }
+  }
+  // ---------------------------------
+
   const publicRoutes = ['/login', '/resolve', '/patient-login'];
   const isPublicRoute = publicRoutes.some(route => config.url?.includes(route));
 
@@ -69,6 +80,18 @@ const processQueue = (error, token = null) => {
 axiosClient.interceptors.response.use(
   (response) => response, 
   async (error) => {
+    // If the request was successfully queued offline, seamlessly trick the app
+    // into thinking the backend responded with a 200 OK so the UI doesn't break.
+    if (error.message === 'OFFLINE_QUEUED') {
+      return Promise.resolve({
+        data: {
+          status: 200,
+          message: 'Action saved offline and will sync when reconnected.',
+          data: true
+        }
+      });
+    }
+
     const originalRequest = error.config;
     
     // If it's a 401 and we haven't already retried this exact request
