@@ -14,9 +14,8 @@ import {
   extractCollection,
   unwrapAppointment,
 } from '../../utils/appointmentMapping';
-
 import { buildPaginationCacheKey } from '../../utils/paginationCache';
-import { fetchAppointmentMessageSummariesAPI } from '../chat/chatAPI';
+import axiosClient from '../../services/axiosClient';
 
 import {
   fetchAppointmentsRequest,
@@ -59,6 +58,20 @@ const buildLatestNotesMap = (payload) =>
 
     return acc;
   }, {});
+
+const fetchAppointmentMessageSummariesAPI = async (appointmentIds = []) => {
+  const params = Array.isArray(appointmentIds) && appointmentIds.length > 0
+    ? { appointment_ids: appointmentIds.join(',') }
+    : {};
+
+  const response = await axiosClient.get('/messages', {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+    params,
+  });
+
+  return response.data;
+};
 
 // ── Fetch all appointments ────────────────────────────────────────────────
 function* handleFetchAppointments(action) {
