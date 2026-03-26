@@ -9,6 +9,7 @@ export const warmTheme = {
     sidebarBg: '#5e4c3a',     // Earthy brown sidebar
     sidebarText: '#fcfaf8',
     sidebarHover: '#7a6550',
+    sidebarTextHover: '#ffd4ab',
     danger: '#c0392b'
   }
 };

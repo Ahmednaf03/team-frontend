@@ -7,6 +7,8 @@ import { ConfigProvider, theme as antdTheme, App } from 'antd';
 import { lightTheme } from '../themes/theme';
 import { darkTheme } from '../themes/darkTheme';
 import { warmTheme } from '../themes/warmTheme';
+import { crimsonTheme } from '../themes/crimsonTheme';
+import { greenTheme } from '../themes/greenTheme';
 import { GlobalStyle } from '../themes/GlobalStyles';
 
 // 1. Create the Context
@@ -31,6 +33,8 @@ export const CustomThemeProvider = ({ children, initialTheme = 'default' }) => {
     switch (name) {
       case 'dark': return darkTheme;
       case 'warm': return warmTheme;
+      case 'crimson': return crimsonTheme;
+      case 'green': return greenTheme;
       default: return lightTheme;
     }
   };
@@ -46,10 +50,10 @@ export const CustomThemeProvider = ({ children, initialTheme = 'default' }) => {
           theme={{
             algorithm: themeName === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
             token: {
-              ...(themeName === 'warm' && {
-                colorPrimary: warmTheme.colors.primary,
-                colorBgBase: warmTheme.colors.background,
-                colorTextBase: warmTheme.colors.text,
+              ...(themeName !== 'default' && {
+                colorPrimary: currentThemeObject.colors.primary,
+                colorBgBase: currentThemeObject.colors.background,
+                colorTextBase: currentThemeObject.colors.text,
               }),
             },
           }}

@@ -99,13 +99,7 @@ export default function useAppointmentReferenceData() {
           : Promise.resolve([]);
 
         const doctorPromise = capabilities.canReadDoctors
-          ? fetchReferenceList('/staff', { per_page: 500 }).catch(async () => {
-              try {
-                return await fetchReferenceList('/users', { per_page: 500 });
-              } catch {
-                return [];
-              }
-            })
+          ? fetchReferenceList('/staff', { per_page: 500 }).catch(() => [])
           : Promise.resolve([]);
 
         const [patientRecords, doctorRecords] = await Promise.all([

@@ -24,6 +24,12 @@ const initialState = {
   loading: false,
   error: null,
   initialized: false,
+  // Change-password sub-state
+  changePassword: {
+    loading: false,
+    error: null,
+    success: false,
+  },
 };
 
 const authSlice = createSlice({
@@ -63,6 +69,11 @@ const authSlice = createSlice({
       state.isLoggedIn = false;
       state.loading = false;
       state.error = null;
+      state.changePassword = {
+        loading: false,
+        error: null,
+        success: false,
+      };
     },
 
     // Called after successful token refresh
@@ -80,6 +91,26 @@ const authSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+
+    // ─── Change Password ──────────────────────────────────────────
+    changePasswordRequest: (state) => {
+      state.changePassword.loading = true;
+      state.changePassword.error = null;
+      state.changePassword.success = false;
+    },
+    changePasswordSuccess: (state) => {
+      state.changePassword.loading = false;
+      state.changePassword.success = true;
+      state.changePassword.error = null;
+    },
+    changePasswordFailure: (state, action) => {
+      state.changePassword.loading = false;
+      state.changePassword.error = action.payload;
+      state.changePassword.success = false;
+    },
+    clearChangePasswordState: (state) => {
+      state.changePassword = { loading: false, error: null, success: false };
+    },
   },
 });
 
@@ -92,6 +123,10 @@ export const {
   tokenRefreshed,
   sessionCheckComplete,
   clearError,
+  changePasswordRequest,
+  changePasswordSuccess,
+  changePasswordFailure,
+  clearChangePasswordState,
 } = authSlice.actions;
 
 export default authSlice.reducer;

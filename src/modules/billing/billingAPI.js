@@ -14,23 +14,35 @@ import axiosClient from '../../services/axiosClient';
  */
 
 export const generateInvoiceAPI = async (prescriptionId) => {
-  const response = await axiosClient.post(`/billing/${prescriptionId}`,{});
+  const response = await axiosClient.post(`/billing/${prescriptionId}`, {}, {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+  });
   //const response = await axiosClient.post('/billing', { prescription_id: prescriptionId });
   return response.data;
 };
 
 export const markInvoicePaidAPI = async (invoiceId) => {
-  const response = await axiosClient.patch(`/billing/${invoiceId}`,{});
+  const response = await axiosClient.patch(`/billing/${invoiceId}`, {}, {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+  });
   return response.data;
 };
 
 export const fetchBillingSummaryAPI = async () => {
-  const response = await axiosClient.get('/billing/summary');
+  const response = await axiosClient.get('/billing/summary', {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+  });
   console.log("summary api",response.data);
   return response.data;
 };
 
 export const fetchAllInvoicesAPI = async () => {
-  const response = await axiosClient.get('/billing');
+  const response = await axiosClient.get('/billing', {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+  });
   return response.data;
 };

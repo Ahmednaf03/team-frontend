@@ -5,10 +5,12 @@ import {
   PlusOutlined,
   EditOutlined,
   StopOutlined,
+  CheckOutlined,
   DeleteOutlined,
   ReloadOutlined,
   UnorderedListOutlined,
   CalendarOutlined,
+  MoreOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import useAppointments from '../../modules/appointments/hooks/useAppointments';
@@ -87,6 +89,9 @@ const SendGlyph = () => (
     </svg>
   </span>
 );
+
+const getAppointmentStatusLabel = (status) =>
+  String(status || '').toLowerCase() === 'completed' ? 'Confirmed' : status;
 
 const roleLabel = (role) => {
   const normalized = String(role || '').toLowerCase();
@@ -401,6 +406,7 @@ const AppointmentList = () => {
     success,
     fetchAppointments,
     cancelAppointment,
+    updateAppointment,
     deleteAppointment,
     selectAppointment,
     applyFilters,
@@ -415,7 +421,10 @@ const AppointmentList = () => {
   const [viewMode, setViewMode] = React.useState('list'); // 'list' | 'calendar'
   const [chatOpen, setChatOpen] = React.useState(false);
   const [chatAppointment, setChatAppointment] = React.useState(null);
-  const canUseInternalChat = ['provider', 'nurse'].includes(String(userRole || '').toLowerCase());
+  const [expandedStatusActionsId, setExpandedStatusActionsId] = React.useState(null);
+  const normalizedUserRole = String(userRole || '').toLowerCase();
+  const isAdmin = normalizedUserRole === 'admin';
+  const canUseInternalChat = !isAdmin && ['provider', 'nurse'].includes(normalizedUserRole);
 
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -466,6 +475,25 @@ const AppointmentList = () => {
   const closeChatModal = () => {
     setChatOpen(false);
     setChatAppointment(null);
+  };
+
+  const toggleStatusActions = (appointmentId) => {
+    setExpandedStatusActionsId((current) =>
+      current === appointmentId ? null : appointmentId
+    );
+  };
+
+  const handleMarkCompleted = (record) => {
+    if (!permissions.canCompleteAppointments) return;
+    updateAppointment({
+      id: record.id,
+      patient_id: record.patient_id,
+      doctor_id: record.doctor_id,
+      scheduled_at: record.scheduled_at,
+      notes: record.notes ?? '',
+      status: 'completed',
+    });
+    setExpandedStatusActionsId(null);
   };
 
   // ── Filter handlers ───────────────────────────────────────────────────────
@@ -519,11 +547,11 @@ const AppointmentList = () => {
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = [
     {
-      title: '#',
+      title: 'ID',
       dataIndex: 'id',
       key: 'id',
       width: 60,
-      render: (id) => <span style={{ color: '#8c8c8c', fontSize: 12 }}>#{id}</span>,
+      render: (id) => <span style={{ color: '#8c8c8c', fontSize: 12 }}>{id}</span>,
     },
     {
       title: 'Patient',
@@ -547,7 +575,9 @@ const AppointmentList = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status) => <StatusBadge $status={status}>{status}</StatusBadge>,
+      render: (status) => (
+        <StatusBadge $status={status}>{getAppointmentStatusLabel(status)}</StatusBadge>
+      ),
     },
     {
       title: 'Notes',
@@ -559,11 +589,12 @@ const AppointmentList = () => {
     canUseInternalChat ||
     permissions.canUpdateAppointments ||
     permissions.canCancelAppointments ||
+    permissions.canCompleteAppointments ||
     permissions.canDeleteAppointments
       ? {
       title: 'Actions',
       key: 'actions',
-      width: 140,
+      width: 190,
       render: (_, record) => (
         <div style={{ display: 'flex', gap: 8 }}>
           {canUseInternalChat && (
@@ -588,18 +619,53 @@ const AppointmentList = () => {
             </Tooltip>
           )}
 
-          {permissions.canCancelAppointments && record.status === 'scheduled' && (
-            <Tooltip title="Cancel">
-              <Popconfirm
-                title="Cancel this appointment?"
-                okText="Yes"
-                cancelText="No"
-                onConfirm={() => cancelAppointment(record.id)}
-              >
-                <Button size="small" icon={<StopOutlined />} danger loading={actionLoading} />
-              </Popconfirm>
-            </Tooltip>
-          )}
+          {(permissions.canCancelAppointments || permissions.canCompleteAppointments) &&
+          record.status === 'scheduled' ? (
+            expandedStatusActionsId === record.id ? (
+              <>
+                {permissions.canCompleteAppointments && (
+                  <Tooltip title="Mark confirmed">
+                    <Popconfirm
+                      title="Mark this appointment as confirmed?"
+                      okText="Yes"
+                      cancelText="No"
+                      onConfirm={() => handleMarkCompleted(record)}
+                    >
+                      <Button
+                        size="small"
+                        icon={<CheckOutlined />}
+                        loading={actionLoading}
+                      />
+                    </Popconfirm>
+                  </Tooltip>
+                )}
+
+                {permissions.canCancelAppointments && (
+                  <Tooltip title="Cancel">
+                    <Popconfirm
+                      title="Cancel this appointment?"
+                      okText="Yes"
+                      cancelText="No"
+                      onConfirm={() => {
+                        cancelAppointment(record.id);
+                        setExpandedStatusActionsId(null);
+                      }}
+                    >
+                      <Button size="small" icon={<StopOutlined />} danger loading={actionLoading} />
+                    </Popconfirm>
+                  </Tooltip>
+                )}
+              </>
+            ) : (
+              <Tooltip title="Status actions">
+                <Button
+                  size="small"
+                  icon={<MoreOutlined />}
+                  onClick={() => toggleStatusActions(record.id)}
+                />
+              </Tooltip>
+            )
+          ) : null}
 
           {permissions.canDeleteAppointments && (
             <Tooltip title="Delete">
@@ -673,7 +739,7 @@ const AppointmentList = () => {
               onChange={handleStatusChange}
             >
               <Option value="scheduled">Scheduled</Option>
-              <Option value="completed">Completed</Option>
+              <Option value="completed">Confirmed</Option>
               <Option value="cancelled">Cancelled</Option>
             </Select>
 
@@ -730,11 +796,13 @@ const AppointmentList = () => {
       )}
 
       {/* ── Create / Edit modal ── */}
-      <AppointmentFormModal
-        open={modalOpen}
-        onClose={closeModal}
-        editingAppointment={editingAppointment}
-      />
+      {modalOpen && (
+        <AppointmentFormModal
+          open={modalOpen}
+          onClose={closeModal}
+          editingAppointment={editingAppointment}
+        />
+      )}
       <AppointmentChatInlineModal
         open={chatOpen}
         onClose={closeChatModal}

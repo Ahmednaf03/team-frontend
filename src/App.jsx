@@ -6,14 +6,18 @@ import { Toaster } from 'react-hot-toast';
 
 import { getTenantSlug } from './utils/getTenantFromDomain';
 import axiosClient from './services/axiosClient';
-
+import { initSyncManager } from './services/syncManager';
 import AppRouter from './routes/AppRouter'; 
 import { CustomThemeProvider } from './context/ThemeContext'; 
-import ErrorBoundary from './components/layout/ErrorBoundary'; // <-- 1. Import it
+import ErrorBoundary from './components/layout/ErrorBoundary';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import LandingPage from './pages/Auth/LandingPage';
 import { Activity } from 'lucide-react';
+
+// Register the sync manager once at app startup so it listens for 'online' events
+// and replays any requests queued while the user was offline.
+initSyncManager();
 
 const App = () => {
   const tenantSlug = getTenantSlug();
@@ -26,7 +30,9 @@ const App = () => {
     const fetchTenantDetails = async () => {
       try {
         const response = await axiosClient.get('/resolve');
+        console.log("tenant config ",response.data );
         setTenantConfig(response.data);
+        
       } catch (err) {
         setError('Workspace not found or inactive.');
       } finally {

@@ -1,6 +1,7 @@
 import { call, put, takeLatest, select, race, delay } from 'redux-saga/effects';
 import { enrichAppointment } from '../../utils/appointmentMapping';
 import { fetchCalendarDataAPI, rescheduleAppointmentAPI } from './calendarAPI';
+import { fetchAppointmentMessageSummariesAPI } from '../chat/chatAPI';
 import {
   fetchCalendarDataRequest,
   fetchCalendarDataSuccess,
@@ -8,6 +9,7 @@ import {
   rescheduleAppointmentRequest,
   rescheduleAppointmentSuccess,
   rescheduleAppointmentFailure,
+  updateCalendarNotesPreview,
 } from './calendarSlice';
 import {
   createAppointmentSuccess,
@@ -16,14 +18,36 @@ import {
   deleteAppointmentSuccess,
 } from '../appointments/appointmentSlice';
 
+const extractMessages = (payload) => {
+  const data = payload?.data ?? payload;
+  return Array.isArray(data) ? data : [];
+};
+
+const buildLatestNotesMap = (payload) =>
+  extractMessages(payload).reduce((acc, item) => {
+    const appointmentId = Number(item?.appointment_id);
+    const latestMessage = item?.latest_message;
+
+    if (Number.isFinite(appointmentId) && typeof latestMessage === 'string') {
+      acc[appointmentId] = latestMessage;
+    }
+
+    return acc;
+  }, {});
+
 // ── Fetch calendar data ───────────────────────────────────────────────────────
 function* handleFetchCalendarData() {
   try {
     const { selectedDoctor } = yield select((state) => state.calendar);
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
 
     const params = {
       per_page: 200, // get all for calendar view
-      ...(selectedDoctor && { doctor_id: selectedDoctor }),
+      ...((isProvider ? currentUser?.id : selectedDoctor) && {
+        doctor_id: isProvider ? currentUser.id : selectedDoctor,
+      }),
     };
 
     // race() — timeout after 10 seconds
@@ -39,8 +63,23 @@ function* handleFetchCalendarData() {
 
     const raw = response.data ?? response;
     const enriched = Array.isArray(raw) ? raw.map(enrichAppointment) : [];
+    const appointmentIds = enriched.map((appointment) => appointment.id).filter(Boolean);
+    const latestNotesResponse = appointmentIds.length
+      ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
+      : { data: [] };
+    const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
+    const hydrated = enriched.map((appointment) =>
+      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
+        ? { ...appointment, notes: latestNotesMap[appointment.id] }
+        : appointment
+    );
+    const scoped = isProvider
+      ? hydrated.filter(
+          (appointment) => Number(appointment.doctor_id) === Number(currentUser?.id)
+        )
+      : hydrated;
 
-    yield put(fetchCalendarDataSuccess(enriched));
+    yield put(fetchCalendarDataSuccess(scoped));
   } catch (error) {
     const message =
       error.response?.data?.message || 'Failed to load calendar data.';

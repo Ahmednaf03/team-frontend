@@ -24,6 +24,16 @@ export const loginAPI = async ({ username, password }) => {
   return response.data; 
 };
 
+export const PatientloginAPI = async ({ username, password }) => {
+  const response = await axiosClient.post('/patient-login', {
+    email: username, // <-- CRITICAL: Map frontend 'username' to backend 'email'
+    password: password,
+  },{withCredentials: true}
+
+);
+  return response.data; 
+};
+
 export const refreshTokenAPI = async () => {
   // 1. Grab the current hostname and extract the tenant slug
   const currentHostname = window.location.hostname;
@@ -68,5 +78,17 @@ export const fetchCsrfTokenAPI = async () => {
 
 export const fetchMeAPI = async () => {
   const response = await axiosClient.get('/api/auth/me');
+  return response.data;
+};
+
+export const changePasswordAPI = async ({ old_password, new_password }) => {
+  const response = await axiosClient.post(
+    '/change-password',
+    { old_password, new_password },
+    {
+      withCredentials: true,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  );
   return response.data;
 };
