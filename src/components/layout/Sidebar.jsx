@@ -162,7 +162,7 @@ const Sidebar = () => {
       )}
 
       {hasAccess(['Admin']) && (
-        <NavItem to="/settings/users" $collapsed={isCollapsed}>
+        <NavItem to="/settings/security" $collapsed={isCollapsed}>
           <Settings size={20} />
           <NavLabel $collapsed={isCollapsed}>Settings</NavLabel>
         </NavItem>

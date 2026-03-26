@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { useThemeContext } from '../../context/ThemeContext';
 import logoImg from '../../assets/images/health.png';
 import NotificationPanel from '../notifications/NotificationPanel';
+import OfflineIndicator from './OfflineIndicator';
 
 const HeaderContainer = styled.header`
   height: 52px;
@@ -104,6 +105,9 @@ const Header = () => {
           <option value="dark">Dark Theme</option>
           <option value="warm">Warm Theme</option>
         </ThemeSelect>
+
+        {/* Offline queue indicator */}
+        <OfflineIndicator />
 
         {/* Notification bell — drops down panel */}
         <NotificationPanel />
