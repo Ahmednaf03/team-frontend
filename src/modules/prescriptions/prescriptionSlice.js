@@ -1,118 +1,112 @@
-// src/modules/prescriptions/prescriptionSlice.js
 import { createSlice } from '@reduxjs/toolkit';
-
-/**
- * prescriptionSlice
- *
- * State shape:
- *   list              → all prescriptions from API
- *   filtered          → after client-side search filter
- *   currentPrescription → single prescription with items[], for detail/modal view
- *   loading           → fetching list
- *   detailLoading     → fetching single prescription details
- *   submitting        → create / addItem / verify / dispense in progress
- *   error             → error message or null
- *   searchQuery       → current filter string
- *   statusFilter      → 'ALL' | 'PENDING' | 'VERIFIED' | 'DISPENSED' | 'CANCELLED'
- *   pagination        → { page, pageSize, total, hasNext, hasPrev }
- */
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 
 const PAGE_SIZE = 5;
 
 const initialState = {
   list: [],
   filtered: [],
-  prefetchedPages: {},
   currentPrescription: null,
   loading: false,
-  prefetching: false,
   detailLoading: false,
   submitting: false,
   error: null,
+  pageCache: {},
+  paginationMetaByQuery: {},
   searchQuery: '',
   statusFilter: 'ALL',
   pagination: {
     page: 1,
     pageSize: PAGE_SIZE,
     total: 0,
+    totalPages: 1,
     hasNext: false,
     hasPrev: false,
   },
 };
 
-const computePagination = (total, page, pageSize) => ({
-  page,
-  pageSize,
-  total,
-  hasNext: page * pageSize < total,
-  hasPrev: page > 1,
-});
+const buildPaginationState = (meta, page, fallbackPageSize) => {
+  const pageSize = Number(meta?.perPage) || fallbackPageSize || PAGE_SIZE;
+  const total = Number(meta?.totalRecords) || 0;
+  const totalPages = Number(meta?.totalPages) || 1;
 
-// Apply both search + status filters
-const applyFilters = (list, searchQuery, statusFilter) => {
-  let result = list;
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1,
+  };
+};
 
-  if (statusFilter && statusFilter !== 'ALL') {
-    result = result.filter((p) => p.status === statusFilter);
+const syncCachedPage = (state, page, queryKey) => {
+  const cachedPage = state.pageCache[queryKey]?.[page];
+  const meta = state.paginationMetaByQuery[queryKey];
+
+  if (!cachedPage || !meta) {
+    return;
   }
 
-  const q = searchQuery.toLowerCase().trim();
-  if (q) {
-    result = result.filter(
-      (p) =>
-        String(p.id).includes(q) ||
-        String(p.patient_id).includes(q) ||
-        String(p.doctor_id).includes(q) ||
-        p.status?.toLowerCase().includes(q)
-    );
-  }
-
-  return result;
+  state.list = cachedPage;
+  state.filtered = cachedPage;
+  state.pagination = buildPaginationState(meta, page, state.pagination.pageSize);
 };
 
 const prescriptionSlice = createSlice({
   name: 'prescriptions',
   initialState,
   reducers: {
-    // ── Fetch All ──────────────────────────────────────────────────────────
-    fetchPrescriptionsRequest: (state) => {
+    fetchPrescriptionsRequest: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = true;
       state.error = null;
     },
     fetchPrescriptionsSuccess: (state, action) => {
+      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
+      }
+
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        perPage: pagination?.perPage ?? state.pagination.pageSize,
+        totalRecords: pagination?.totalRecords ?? state.pagination.total,
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+      };
+
+      if (prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.list = action.payload;
-      const filtered = applyFilters(action.payload, state.searchQuery, state.statusFilter);
-      state.filtered = filtered;
-      state.pagination = computePagination(
-      filtered.length,  // ← use local variable, not state.filtered
-      1,
-      state.pagination.pageSize
-    );
+      state.list = data;
+      state.filtered = data;
+      state.pagination = buildPaginationState(
+        pagination,
+        page,
+        state.pagination.pageSize
+      );
     },
     fetchPrescriptionsFailure: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.error = action.payload;
+      state.error = action.payload?.message ?? action.payload;
+    },
+    hydratePrescriptionsFromCache: (state, action) => {
+      const { page, queryKey } = action.payload;
+      syncCachedPage(state, page, queryKey);
+      state.loading = false;
+      state.error = null;
     },
 
-prefetchPageRequest: (state) => {
-  state.prefetching = true;
-},
-prefetchPageSuccess: (state, action) => {
-  const { page, data } = action.payload;
-  state.prefetching = false;
-  state.prefetchedPages[page] = data; // cache it
-},
-prefetchPageFailure: (state) => {
-  state.prefetching = false;
-},
-
-// ── Clear prefetch cache when filters/search change ────────────────────────
-clearPrefetchCache: (state) => {
-  state.prefetchedPages = {};
-},
-
-    // ── Fetch By ID ────────────────────────────────────────────────────────
     fetchPrescriptionByIdRequest: (state) => {
       state.detailLoading = true;
       state.error = null;
@@ -126,101 +120,98 @@ clearPrefetchCache: (state) => {
       state.error = action.payload;
     },
 
-    // ── Create Prescription ────────────────────────────────────────────────
     createPrescriptionRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     createPrescriptionSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     createPrescriptionFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Add Item ───────────────────────────────────────────────────────────
     addItemRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     addItemSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     addItemFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Verify ─────────────────────────────────────────────────────────────
     verifyRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     verifySuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     verifyFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Dispense ───────────────────────────────────────────────────────────
     dispenseRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     dispenseSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     dispenseFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-   setSearchQuery: (state, action) => {
-  state.searchQuery = action.payload;
-  state.prefetchedPages = {}; // ← ADD: clear cache on search
-  const filtered = applyFilters(state.list, action.payload, state.statusFilter);
-  state.filtered = filtered;
-  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
-},
-setStatusFilter: (state, action) => {
-  state.statusFilter = action.payload;
-  state.prefetchedPages = {}; // ← ADD: clear cache on filter
-  const filtered = applyFilters(state.list, state.searchQuery, action.payload);
-  state.filtered = filtered;
-  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
-},setSearchQuery: (state, action) => {
-  state.searchQuery = action.payload;
-  state.prefetchedPages = {}; // ←  clear cache on search
-  const filtered = applyFilters(state.list, action.payload, state.statusFilter);
-  state.filtered = filtered;
-  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
-},
-setStatusFilter: (state, action) => {
-  state.statusFilter = action.payload;
-  state.prefetchedPages = {}; // ←  clear cache on filter
-  const filtered = applyFilters(state.list, state.searchQuery, action.payload);
-  state.filtered = filtered;
-  state.pagination = computePagination(filtered.length, 1, state.pagination.pageSize);
-},
+    setSearchQuery: (state, action) => {
+      state.searchQuery = action.payload;
+      state.pagination.page = 1;
+    },
+    setStatusFilter: (state, action) => {
+      state.statusFilter = action.payload;
+      state.pagination.page = 1;
+    },
 
-    // ── Pagination ─────────────────────────────────────────────────────────
     nextPage: (state) => {
-      const { page, pageSize, total } = state.pagination;
-      if (page * pageSize < total) {
-        state.pagination = computePagination(total, page + 1, pageSize);
+      const next = state.pagination.page + 1;
+      if (next > state.pagination.totalPages) {
+        return;
       }
+
+      state.pagination.page = next;
+      const queryKey = buildPaginationCacheKey({
+        search: state.searchQuery,
+        status: state.statusFilter,
+      });
+      syncCachedPage(state, next, queryKey);
     },
     prevPage: (state) => {
-      const { page, pageSize, total } = state.pagination;
-      if (page > 1) {
-        state.pagination = computePagination(total, page - 1, pageSize);
+      const prev = state.pagination.page - 1;
+      if (prev < 1) {
+        return;
       }
+
+      state.pagination.page = prev;
+      const queryKey = buildPaginationCacheKey({
+        search: state.searchQuery,
+        status: state.statusFilter,
+      });
+      syncCachedPage(state, prev, queryKey);
     },
 
-    // ── Misc ───────────────────────────────────────────────────────────────
     setCurrentPrescription: (state, action) => {
       state.currentPrescription = action.payload;
     },
@@ -237,6 +228,7 @@ export const {
   fetchPrescriptionsRequest,
   fetchPrescriptionsSuccess,
   fetchPrescriptionsFailure,
+  hydratePrescriptionsFromCache,
   fetchPrescriptionByIdRequest,
   fetchPrescriptionByIdSuccess,
   fetchPrescriptionByIdFailure,
@@ -259,10 +251,6 @@ export const {
   setCurrentPrescription,
   clearCurrentPrescription,
   clearError,
-  prefetchPageRequest,
-  prefetchPageSuccess,
-  prefetchPageFailure,
-  clearPrefetchCache,
 } = prescriptionSlice.actions;
 
 export default prescriptionSlice.reducer;

@@ -39,10 +39,12 @@ export const fetchBillingSummaryAPI = async () => {
   return response.data;
 };
 
-export const fetchAllInvoicesAPI = async () => {
+export const fetchAllInvoicesAPI = async (params = {}) => {
   const response = await axiosClient.get('/billing', {
+    params,
     withCredentials: true,
     headers: { 'Content-Type': 'application/json' },
   });
+
   return response.data;
 };

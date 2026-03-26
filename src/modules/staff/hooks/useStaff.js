@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchStaffRequest,
   fetchStaffByIdRequest,
@@ -15,29 +15,14 @@ import {
   clearCurrentStaff,
   clearError,
 } from '../staffSlice';
+import { buildPaginationCacheKey } from '../../../utils/paginationCache';
 
-/**
- * useStaff()
- *
- * Central hook for all staff operations.
- * Components never touch the slice or API directly.
- *
- * Usage:
- *   const {
- *     staff, total, loading, submitting, error,
- *     searchQuery, roleFilter, statusFilter,
- *     page, totalPages, hasNext, hasPrev,
- *     fetchStaff, createStaff, updateStaff, deleteStaff,
- *     searchStaff, filterByRole, filterByStatus,
- *     goNext, goPrev, dismissError
- *   } = useStaff();
- */
 export default function useStaff() {
   const dispatch = useDispatch();
 
   const {
-    list,
-    filtered,
+    list: staff,
+    pageCache,
     currentStaff,
     loading,
     submitting,
@@ -48,17 +33,31 @@ export default function useStaff() {
     statusFilter,
   } = useSelector((state) => state.staff);
 
-  const { page, pageSize, total, hasNext, hasPrev } = pagination;
+  const { page, pageSize, total, totalPages, hasNext, hasPrev } = pagination;
 
-  // Paginated slice of filtered results
-  const startIdx = (page - 1) * pageSize;
-  const paginatedStaff = filtered.slice(startIdx, startIdx + pageSize);
-  const totalPages = Math.ceil(total / pageSize) || 1;
+  const cacheKey = useMemo(
+    () =>
+      buildPaginationCacheKey({
+        search: searchQuery,
+        role: roleFilter,
+        status: statusFilter,
+      }),
+    [roleFilter, searchQuery, statusFilter]
+  );
+  const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const next = page + 1;
 
-  const fetchStaff = useCallback(() => {
-    dispatch(fetchStaffRequest());
+    if (!totalPages || next > totalPages || cachedPages[next]) {
+      return;
+    }
+
+    dispatch(fetchStaffRequest({ page: next, prefetch: true }));
+  }, [cachedPages, dispatch, page, totalPages]);
+
+  const fetchStaff = useCallback((options = {}) => {
+    dispatch(fetchStaffRequest(options));
   }, [dispatch]);
 
   const viewStaff = useCallback(
@@ -82,22 +81,46 @@ export default function useStaff() {
   );
 
   const searchStaff = useCallback(
-    (query) => dispatch(setSearchQuery(query)),
+    (query) => {
+      dispatch(setSearchQuery(query));
+      dispatch(fetchStaffRequest({ page: 1 }));
+    },
     [dispatch]
   );
 
   const filterByRole = useCallback(
-    (role) => dispatch(setRoleFilter(role)),
+    (role) => {
+      dispatch(setRoleFilter(role));
+      dispatch(fetchStaffRequest({ page: 1 }));
+    },
     [dispatch]
   );
 
   const filterByStatus = useCallback(
-    (status) => dispatch(setStatusFilter(status)),
+    (status) => {
+      dispatch(setStatusFilter(status));
+      dispatch(fetchStaffRequest({ page: 1 }));
+    },
     [dispatch]
   );
 
-  const goNext = useCallback(() => dispatch(nextPage()), [dispatch]);
-  const goPrev = useCallback(() => dispatch(prevPage()), [dispatch]);
+  const goNext = useCallback(() => {
+    if (!hasNext) {
+      return;
+    }
+
+    dispatch(nextPage());
+    dispatch(fetchStaffRequest({ page: page + 1 }));
+  }, [dispatch, hasNext, page]);
+
+  const goPrev = useCallback(() => {
+    if (!hasPrev) {
+      return;
+    }
+
+    dispatch(prevPage());
+    dispatch(fetchStaffRequest({ page: page - 1 }));
+  }, [dispatch, hasPrev, page]);
 
   const selectStaff = useCallback(
     (member) => dispatch(setCurrentStaff(member)),
@@ -109,25 +132,21 @@ export default function useStaff() {
   const dismissError = useCallback(() => dispatch(clearError()), [dispatch]);
 
   return {
-    // data
-    staff: paginatedStaff,
-    allStaff: filtered,
+    staff,
+    allStaff: staff,
     currentStaff,
-    // status
     loading,
     submitting,
     error,
-    // filters
     searchQuery,
     roleFilter,
     statusFilter,
-    // pagination
     page,
+    pageSize,
     totalPages,
     hasNext,
     hasPrev,
     total,
-    // actions
     fetchStaff,
     viewStaff,
     createStaff,

@@ -1,19 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 
-/**
- * billingSlice
- *
- * State shape:
- *   invoices        → full list of invoices from API
- *   filtered        → invoices after client-side filter
- *   summary         → { total_invoices, total_paid, total_pending }
- *   currentInvoice  → single invoice for detail view
- *   loading         → fetching invoices/summary
- *   submitting      → generate invoice / mark paid in progress
- *   error           → error message string or null
- *   statusFilter    → 'ALL' | 'PENDING' | 'PAID'
- *   searchQuery     → search string against patient name / invoice id
- */
+const PAGE_SIZE = 5;
 
 const initialState = {
   invoices: [],
@@ -28,56 +16,107 @@ const initialState = {
   summaryLoading: false,
   submitting: false,
   error: null,
+  pageCache: {},
+  paginationMetaByQuery: {},
+  pagination: {
+    page: 1,
+    pageSize: PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  },
   statusFilter: 'ALL',
   searchQuery: '',
 };
 
-const applyFilters = (invoices, statusFilter, searchQuery) => {
-  let result = invoices;
+const buildPaginationState = (meta, page, fallbackPageSize) => {
+  const pageSize = Number(meta?.perPage) || fallbackPageSize || PAGE_SIZE;
+  const total = Number(meta?.totalRecords) || 0;
+  const totalPages = Number(meta?.totalPages) || 1;
 
-  if (statusFilter !== 'ALL') {
-    result = result.filter((inv) => inv.status === statusFilter);
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1,
+  };
+};
+
+const syncCachedPage = (state, page, queryKey) => {
+  const cachedPage = state.pageCache[queryKey]?.[page];
+  const meta = state.paginationMetaByQuery[queryKey];
+
+  if (!cachedPage || !meta) {
+    return;
   }
 
-  if (searchQuery.trim()) {
-    const q = searchQuery.toLowerCase().trim();
-    result = result.filter(
-      (inv) =>
-        String(inv.id).includes(q) ||
-        inv.patient_name?.toLowerCase().includes(q) ||
-        String(inv.prescription_id).includes(q)
-    );
-  }
-
-  return result;
+  state.invoices = cachedPage;
+  state.filtered = cachedPage;
+  state.pagination = buildPaginationState(meta, page, state.pagination.pageSize);
 };
 
 const billingSlice = createSlice({
   name: 'billing',
   initialState,
   reducers: {
-    // ── Fetch All Invoices ─────────────────────────────────────────────────
-    fetchInvoicesRequest: (state) => {
+    fetchInvoicesRequest: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = true;
       state.error = null;
     },
     fetchInvoicesSuccess: (state, action) => {
+      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
+      }
+
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        perPage: pagination?.perPage ?? state.pagination.pageSize,
+        totalRecords: pagination?.totalRecords ?? state.pagination.total,
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+      };
+
+      if (prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.invoices = action.payload;
-      state.filtered = applyFilters(action.payload, state.statusFilter, state.searchQuery);
+      state.invoices = data;
+      state.filtered = data;
+      state.pagination = buildPaginationState(
+        pagination,
+        page,
+        state.pagination.pageSize
+      );
     },
     fetchInvoicesFailure: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.error = action.payload;
+      state.error = action.payload?.message ?? action.payload;
+    },
+    hydrateInvoicesFromCache: (state, action) => {
+      const { page, queryKey } = action.payload;
+      syncCachedPage(state, page, queryKey);
+      state.loading = false;
+      state.error = null;
     },
 
-    // ── Fetch Summary ──────────────────────────────────────────────────────
     fetchSummaryRequest: (state) => {
       state.summaryLoading = true;
       state.error = null;
     },
     fetchSummarySuccess: (state, action) => {
-      console.log("Fetch summary slice",action.payload);
       state.summaryLoading = false;
       state.summary = action.payload;
     },
@@ -86,51 +125,69 @@ const billingSlice = createSlice({
       state.error = action.payload;
     },
 
-    // ── Generate Invoice ───────────────────────────────────────────────────
     generateInvoiceRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     generateInvoiceSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     generateInvoiceFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Mark As Paid ───────────────────────────────────────────────────────
     markPaidRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
-    markPaidSuccess: (state, action) => {
+    markPaidSuccess: (state) => {
       state.submitting = false;
-      // Optimistically update local invoice status
-      const id = action.payload;
-      const updateList = (list) =>
-        list.map((inv) =>
-          inv.id === id ? { ...inv, status: 'PAID', paid_at: new Date().toISOString() } : inv
-        );
-      state.invoices = updateList(state.invoices);
-      state.filtered = applyFilters(state.invoices, state.statusFilter, state.searchQuery);
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     markPaidFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Filters & Search ───────────────────────────────────────────────────
     setStatusFilter: (state, action) => {
       state.statusFilter = action.payload;
-      state.filtered = applyFilters(state.invoices, action.payload, state.searchQuery);
+      state.pagination.page = 1;
     },
     setSearchQuery: (state, action) => {
       state.searchQuery = action.payload;
-      state.filtered = applyFilters(state.invoices, state.statusFilter, action.payload);
+      state.pagination.page = 1;
+    },
+    nextPage: (state) => {
+      const next = state.pagination.page + 1;
+      if (next > state.pagination.totalPages) {
+        return;
+      }
+
+      state.pagination.page = next;
+      const queryKey = buildPaginationCacheKey({
+        search: state.searchQuery,
+        status: state.statusFilter,
+      });
+      syncCachedPage(state, next, queryKey);
+    },
+    prevPage: (state) => {
+      const prev = state.pagination.page - 1;
+      if (prev < 1) {
+        return;
+      }
+
+      state.pagination.page = prev;
+      const queryKey = buildPaginationCacheKey({
+        search: state.searchQuery,
+        status: state.statusFilter,
+      });
+      syncCachedPage(state, prev, queryKey);
     },
 
-    // ── Current Invoice ────────────────────────────────────────────────────
     setCurrentInvoice: (state, action) => {
       state.currentInvoice = action.payload;
     },
@@ -147,6 +204,7 @@ export const {
   fetchInvoicesRequest,
   fetchInvoicesSuccess,
   fetchInvoicesFailure,
+  hydrateInvoicesFromCache,
   fetchSummaryRequest,
   fetchSummarySuccess,
   fetchSummaryFailure,
@@ -158,6 +216,8 @@ export const {
   markPaidFailure,
   setStatusFilter,
   setSearchQuery,
+  nextPage,
+  prevPage,
   setCurrentInvoice,
   clearCurrentInvoice,
   clearError,

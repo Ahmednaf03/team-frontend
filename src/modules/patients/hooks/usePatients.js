@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchPatientsRequest,
   fetchPatientByIdRequest,
@@ -13,27 +13,14 @@ import {
   clearCurrentPatient,
   clearError,
 } from '../patientSlice';
+import { buildPaginationCacheKey } from '../../../utils/paginationCache';
 
-/**
- * usePatients()
- *
- * Central hook for all patient operations.
- * Components never touch the slice or API directly.
- *
- * Usage:
- *   const {
- *     patients, currentPage, totalPages, hasNext, hasPrev,
- *     loading, submitting, error,
- *     fetchPatients, createPatient, updatePatient, deletePatient,
- *     searchPatients, goNext, goPrev, viewPatient
- *   } = usePatients();
- */
 export default function usePatients() {
   const dispatch = useDispatch();
 
   const {
-    list,
-    filtered,
+    list: patients,
+    pageCache,
     currentPatient,
     loading,
     submitting,
@@ -42,17 +29,26 @@ export default function usePatients() {
     searchQuery,
   } = useSelector((state) => state.patients);
 
-  const { page, pageSize, total, hasNext, hasPrev } = pagination;
+  const { page, pageSize, total, totalPages, hasNext, hasPrev } = pagination;
 
-  // Paginated slice of filtered results
-  const startIdx = (page - 1) * pageSize;
-  const paginatedPatients = filtered.slice(startIdx, startIdx + pageSize);
-  const totalPages = Math.ceil(total / pageSize) || 1;
+  const cacheKey = useMemo(
+    () => buildPaginationCacheKey({ search: searchQuery }),
+    [searchQuery]
+  );
+  const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const next = page + 1;
 
-  const fetchPatients = useCallback(() => {
-    dispatch(fetchPatientsRequest());
+    if (!totalPages || next > totalPages || cachedPages[next]) {
+      return;
+    }
+
+    dispatch(fetchPatientsRequest({ page: next, prefetch: true }));
+  }, [cachedPages, dispatch, page, totalPages]);
+
+  const fetchPatients = useCallback((options = {}) => {
+    dispatch(fetchPatientsRequest(options));
   }, [dispatch]);
 
   const viewPatient = useCallback(
@@ -61,8 +57,7 @@ export default function usePatients() {
   );
 
   const createPatient = useCallback(
-    (data, onSuccess) =>
-      dispatch(createPatientRequest({ data, onSuccess })),
+    (data, onSuccess) => dispatch(createPatientRequest({ data, onSuccess })),
     [dispatch]
   );
 
@@ -79,12 +74,30 @@ export default function usePatients() {
   );
 
   const searchPatients = useCallback(
-    (query) => dispatch(setSearchQuery(query)),
+    (query) => {
+      dispatch(setSearchQuery(query));
+      dispatch(fetchPatientsRequest({ page: 1 }));
+    },
     [dispatch]
   );
 
-  const goNext = useCallback(() => dispatch(nextPage()), [dispatch]);
-  const goPrev = useCallback(() => dispatch(prevPage()), [dispatch]);
+  const goNext = useCallback(() => {
+    if (!hasNext) {
+      return;
+    }
+
+    dispatch(nextPage());
+    dispatch(fetchPatientsRequest({ page: page + 1 }));
+  }, [dispatch, hasNext, page]);
+
+  const goPrev = useCallback(() => {
+    if (!hasPrev) {
+      return;
+    }
+
+    dispatch(prevPage());
+    dispatch(fetchPatientsRequest({ page: page - 1 }));
+  }, [dispatch, hasPrev, page]);
 
   const selectPatient = useCallback(
     (patient) => dispatch(setCurrentPatient(patient)),
@@ -99,23 +112,19 @@ export default function usePatients() {
   const dismissError = useCallback(() => dispatch(clearError()), [dispatch]);
 
   return {
-    // data
-    patients: paginatedPatients,
-    allPatients: filtered,
+    patients,
+    allPatients: patients,
     currentPatient,
-    // status
     loading,
     submitting,
     error,
-    // search
     searchQuery,
-    // pagination
     page,
+    pageSize,
     totalPages,
     hasNext,
     hasPrev,
     total,
-    // actions
     fetchPatients,
     viewPatient,
     createPatient,

@@ -1,5 +1,4 @@
-// src/modules/prescriptions/prescriptionSaga.js
-import { call, put, takeLatest, takeEvery } from 'redux-saga/effects';
+import { call, put, takeLatest, takeEvery, select } from 'redux-saga/effects';
 import {
   fetchAllPrescriptionsAPI,
   fetchPrescriptionByIdAPI,
@@ -8,10 +7,12 @@ import {
   verifyPrescriptionAPI,
   dispensePrescriptionAPI,
 } from './prescriptionAPI';
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 import {
   fetchPrescriptionsRequest,
   fetchPrescriptionsSuccess,
   fetchPrescriptionsFailure,
+  hydratePrescriptionsFromCache,
   fetchPrescriptionByIdRequest,
   fetchPrescriptionByIdSuccess,
   fetchPrescriptionByIdFailure,
@@ -27,24 +28,104 @@ import {
   dispenseRequest,
   dispenseSuccess,
   dispenseFailure,
-  prefetchPageRequest,
-  prefetchPageSuccess,
-  prefetchPageFailure,
 } from './prescriptionSlice';
 
-// ── Fetch All ─────────────────────────────────────────────────────────────────
-function* handleFetchPrescriptions() {
+const applyFilters = (prescriptions, searchQuery, statusFilter) => {
+  let result = prescriptions;
+
+  if (statusFilter && statusFilter !== 'ALL') {
+    result = result.filter((prescription) => prescription.status === statusFilter);
+  }
+
+  const q = searchQuery.toLowerCase().trim();
+
+  if (!q) {
+    return result;
+  }
+
+  return result.filter(
+    (prescription) =>
+      String(prescription.id).includes(q) ||
+      String(prescription.patient_id).includes(q) ||
+      String(prescription.doctor_id).includes(q) ||
+      prescription.status?.toLowerCase().includes(q)
+  );
+};
+
+const buildFallbackPage = (items, page, pageSize) => {
+  const totalRecords = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startIdx = (page - 1) * pageSize;
+
+  return {
+    data: items.slice(startIdx, startIdx + pageSize),
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalRecords,
+      perPage: pageSize,
+    },
+  };
+};
+
+function* handleFetchPrescriptions(action) {
   try {
-    const envelope = yield call(fetchAllPrescriptionsAPI);
-    const prescriptions = envelope.data;
-    yield put(fetchPrescriptionsSuccess(Array.isArray(prescriptions) ? prescriptions : []));
+    const { pagination, searchQuery, statusFilter } = yield select(
+      (state) => state.prescriptions
+    );
+    const requestedPage = action.payload?.page ?? pagination.page;
+    const prefetch = Boolean(action.payload?.prefetch);
+    const force = Boolean(action.payload?.force);
+    const queryKey = buildPaginationCacheKey({
+      search: searchQuery,
+      status: statusFilter,
+    });
+    const cachedPage = yield select(
+      (state) => state.prescriptions.pageCache[queryKey]?.[requestedPage]
+    );
+
+    if (cachedPage && !force) {
+      if (!prefetch) {
+        yield put(hydratePrescriptionsFromCache({ page: requestedPage, queryKey }));
+      }
+      return;
+    }
+
+    const params = {
+      page: requestedPage,
+      per_page: pagination.pageSize,
+      ...(searchQuery && { search: searchQuery }),
+      ...(statusFilter !== 'ALL' && { status: statusFilter }),
+    };
+
+    const envelope = yield call(fetchAllPrescriptionsAPI, params);
+    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
+    const paginatedPayload = envelope?.pagination
+      ? {
+          data: responseData,
+          pagination: envelope.pagination,
+        }
+      : buildFallbackPage(
+          applyFilters(responseData, searchQuery, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        );
+
+    yield put(
+      fetchPrescriptionsSuccess({
+        data: paginatedPayload.data,
+        pagination: paginatedPayload.pagination,
+        page: requestedPage,
+        queryKey,
+        prefetch,
+      })
+    );
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to fetch prescriptions.';
-    yield put(fetchPrescriptionsFailure(message));
+    yield put(fetchPrescriptionsFailure({ message, prefetch: action.payload?.prefetch }));
   }
 }
 
-// ── Fetch By ID ───────────────────────────────────────────────────────────────
 function* handleFetchPrescriptionById(action) {
   try {
     const envelope = yield call(fetchPrescriptionByIdAPI, action.payload);
@@ -55,13 +136,13 @@ function* handleFetchPrescriptionById(action) {
   }
 }
 
-// ── Create Prescription ───────────────────────────────────────────────────────
 function* handleCreatePrescription(action) {
   try {
     const envelope = yield call(createPrescriptionAPI, action.payload.data);
     yield put(createPrescriptionSuccess());
+    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) {
-      action.payload.onSuccess(envelope.data); // passes { prescription_id } back
+      action.payload.onSuccess(envelope.data);
     }
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to create prescription.';
@@ -69,15 +150,14 @@ function* handleCreatePrescription(action) {
   }
 }
 
-// ── Add Item ──────────────────────────────────────────────────────────────────
 function* handleAddItem(action) {
   try {
     yield call(addPrescriptionItemAPI, action.payload.data);
     yield put(addItemSuccess());
-    // Re-fetch the prescription so the items list updates in the detail view
     if (action.payload.prescriptionId) {
       yield put(fetchPrescriptionByIdRequest(action.payload.prescriptionId));
     }
+    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to add item.';
@@ -85,13 +165,11 @@ function* handleAddItem(action) {
   }
 }
 
-// ── Verify ────────────────────────────────────────────────────────────────────
 function* handleVerify(action) {
   try {
     yield call(verifyPrescriptionAPI, action.payload.id);
     yield put(verifySuccess());
-    // Refresh both the list and the detail view
-    yield put(fetchPrescriptionsRequest());
+    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message = error.response?.data?.message || 'Verification failed.';
@@ -99,13 +177,11 @@ function* handleVerify(action) {
   }
 }
 
-// ── Dispense ──────────────────────────────────────────────────────────────────
 function* handleDispense(action) {
   try {
     yield call(dispensePrescriptionAPI, action.payload.id);
     yield put(dispenseSuccess());
-    // Refresh list after dispense
-    yield put(fetchPrescriptionsRequest());
+    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message = error.response?.data?.message || 'Dispense failed.';
@@ -113,26 +189,6 @@ function* handleDispense(action) {
   }
 }
 
-function* handlePrefetchPage(action) {
-  try {
-    // action.payload = { page, filtered, pageSize }
-    const { page, filtered, pageSize } = action.payload;
-
-    // slice the already-fetched filtered array — no extra API call needed
-    const startIdx = (page - 1) * pageSize;
-    const data = filtered.slice(startIdx, startIdx + pageSize);
-
-    // small delay so it doesn't compete with current page render
-    yield new Promise((resolve) => setTimeout(resolve, 100));
-
-    yield put(prefetchPageSuccess({ page, data }));
-  } catch (error) {
-    yield put(prefetchPageFailure());
-  }
-}
-
-
-// ── Root Saga ─────────────────────────────────────────────────────────────────
 export default function* prescriptionSaga() {
   yield takeLatest(fetchPrescriptionsRequest.type, handleFetchPrescriptions);
   yield takeLatest(fetchPrescriptionByIdRequest.type, handleFetchPrescriptionById);
@@ -140,5 +196,4 @@ export default function* prescriptionSaga() {
   yield takeEvery(addItemRequest.type, handleAddItem);
   yield takeEvery(verifyRequest.type, handleVerify);
   yield takeEvery(dispenseRequest.type, handleDispense);
-  yield takeEvery(prefetchPageRequest.type, handlePrefetchPage);
 }

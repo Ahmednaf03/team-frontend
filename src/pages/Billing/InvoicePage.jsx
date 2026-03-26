@@ -470,8 +470,6 @@ const SubmitBtn = styled.button`
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 5;
-
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
     parseFloat(amount) || 0
@@ -499,31 +497,30 @@ const InvoicePage = () => {
     error,
     statusFilter,
     searchQuery,
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNext,
+    hasPrev,
     fetchInvoices,
     fetchSummary,
     generateInvoice,
     markAsPaid,
     filterByStatus,
     searchInvoices,
+    goNext,
+    goPrev,
     dismissError,
   } = useBilling();
 
   const [showModal, setShowModal] = useState(false);
   const [prescriptionId, setPrescriptionId] = useState('');
-  const [page, setPage] = useState(1);
 
   useEffect(() => {
     fetchInvoices();
     fetchSummary();
-  }, []);
-
-  // Reset to page 1 on filter/search change
-  useEffect(() => {
-    setPage(1);
-  }, [statusFilter, searchQuery]);
-
-  const totalPages = Math.ceil(invoices.length / PAGE_SIZE) || 1;
-  const paginated = invoices.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  }, [fetchInvoices, fetchSummary]);
 
   const handleGenerate = () => {
     if (!prescriptionId.trim()) return;
@@ -665,7 +662,7 @@ const InvoicePage = () => {
                   ))}
                 </Tr>
               ))
-            ) : paginated.length === 0 ? (
+            ) : invoices.length === 0 ? (
               <tr>
                 <td colSpan={8}>
                   <EmptyState>
@@ -682,7 +679,7 @@ const InvoicePage = () => {
                 </td>
               </tr>
             ) : (
-              paginated.map((inv) => (
+              invoices.map((inv) => (
                 <Tr key={inv.id}>
                   <Td><InvoiceId>{inv.id}</InvoiceId></Td>
                   <Td>{resolvePatientName(inv)}</Td>
@@ -725,11 +722,11 @@ const InvoicePage = () => {
         </Table>
 
         {/* Pagination */}
-        {!loading && invoices.length > PAGE_SIZE && (
+        {!loading && totalPages > 1 && (
           <Pagination>
             <PagBtn
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
+              onClick={goPrev}
+              disabled={!hasPrev}
             >
               <ChevronLeft size={16} />
             </PagBtn>
@@ -737,8 +734,8 @@ const InvoicePage = () => {
               Page {page} of {totalPages}
             </PagInfo>
             <PagBtn
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
+              onClick={goNext}
+              disabled={!hasNext}
             >
               <ChevronRight size={16} />
             </PagBtn>

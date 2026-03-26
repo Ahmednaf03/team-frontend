@@ -1,18 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
-
-/**
- * patientSlice
- *
- * State shape:
- *   list          → full fetched list from API (source of truth)
- *   filtered      → list after client-side search filter applied
- *   currentPatient → single patient for view/edit modal
- *   loading       → global loading (fetch all)
- *   submitting    → loading for create/update/delete operations
- *   error         → error message string or null
- *   pagination    → { page, pageSize, total, hasNext, hasPrev }
- *   searchQuery   → current search string
- */
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 
 const PAGE_SIZE = 5;
 
@@ -23,61 +10,101 @@ const initialState = {
   loading: false,
   submitting: false,
   error: null,
+  pageCache: {},
+  paginationMetaByQuery: {},
   pagination: {
     page: 1,
     pageSize: PAGE_SIZE,
     total: 0,
+    totalPages: 1,
     hasNext: false,
     hasPrev: false,
   },
   searchQuery: '',
-  // prefetch: store next page patients locally
-  prefetchedNext: [],
 };
 
-const computePagination = (total, page, pageSize) => ({
-  page,
-  pageSize,
-  total,
-  hasNext: page * pageSize < total,
-  hasPrev: page > 1,
-});
+const buildPaginationState = (meta, page, fallbackPageSize) => {
+  const pageSize = Number(meta?.perPage) || fallbackPageSize || PAGE_SIZE;
+  const total = Number(meta?.totalRecords) || 0;
+  const totalPages = Number(meta?.totalPages) || 1;
+
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages,
+    hasNext: page < totalPages,
+    hasPrev: page > 1,
+  };
+};
+
+const syncCachedPage = (state, page, queryKey) => {
+  const cachedPage = state.pageCache[queryKey]?.[page];
+  const meta = state.paginationMetaByQuery[queryKey];
+
+  if (!cachedPage || !meta) {
+    return;
+  }
+
+  state.list = cachedPage;
+  state.filtered = cachedPage;
+  state.pagination = buildPaginationState(meta, page, state.pagination.pageSize);
+};
 
 const patientSlice = createSlice({
   name: 'patients',
   initialState,
   reducers: {
-    // ── Fetch All ──────────────────────────────────────────────────────────
-    fetchPatientsRequest: (state) => {
+    fetchPatientsRequest: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = true;
       state.error = null;
     },
     fetchPatientsSuccess: (state, action) => {
+      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
+      }
+
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        perPage: pagination?.perPage ?? state.pagination.pageSize,
+        totalRecords: pagination?.totalRecords ?? state.pagination.total,
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+      };
+
+      if (prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.list = action.payload;
-      // Apply existing search filter to new data
-      const q = state.searchQuery.toLowerCase().trim();
-      state.filtered = q
-        ? action.payload.filter(
-            (p) =>
-              p.name?.toLowerCase().includes(q) ||
-              p.phone?.toLowerCase().includes(q) ||
-              p.diagnosis?.toLowerCase().includes(q) ||
-              p.gender?.toLowerCase().includes(q)
-          )
-        : action.payload;
-      state.pagination = computePagination(
-        state.filtered.length,
-        1,
+      state.list = data;
+      state.filtered = data;
+      state.pagination = buildPaginationState(
+        pagination,
+        page,
         state.pagination.pageSize
       );
     },
     fetchPatientsFailure: (state, action) => {
+      if (action.payload?.prefetch) {
+        return;
+      }
+
       state.loading = false;
-      state.error = action.payload;
+      state.error = action.payload?.message ?? action.payload;
+    },
+    hydratePatientsFromCache: (state, action) => {
+      const { page, queryKey } = action.payload;
+      syncCachedPage(state, page, queryKey);
+      state.loading = false;
+      state.error = null;
     },
 
-    // ── Fetch By ID ────────────────────────────────────────────────────────
     fetchPatientByIdRequest: (state) => {
       state.loading = true;
       state.error = null;
@@ -91,81 +118,73 @@ const patientSlice = createSlice({
       state.error = action.payload;
     },
 
-    // ── Create ─────────────────────────────────────────────────────────────
     createPatientRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     createPatientSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     createPatientFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Update ─────────────────────────────────────────────────────────────
     updatePatientRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     updatePatientSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     updatePatientFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Delete ─────────────────────────────────────────────────────────────
     deletePatientRequest: (state) => {
       state.submitting = true;
       state.error = null;
     },
     deletePatientSuccess: (state) => {
       state.submitting = false;
+      state.pageCache = {};
+      state.paginationMetaByQuery = {};
     },
     deletePatientFailure: (state, action) => {
       state.submitting = false;
       state.error = action.payload;
     },
 
-    // ── Search ─────────────────────────────────────────────────────────────
     setSearchQuery: (state, action) => {
-      const q = action.payload.toLowerCase().trim();
       state.searchQuery = action.payload;
-      state.filtered = q
-        ? state.list.filter(
-            (p) =>
-              p.name?.toLowerCase().includes(q) ||
-              p.phone?.toLowerCase().includes(q) ||
-              p.diagnosis?.toLowerCase().includes(q) ||
-              p.gender?.toLowerCase().includes(q)
-          )
-        : state.list;
-      state.pagination = computePagination(
-        state.filtered.length,
-        1,
-        state.pagination.pageSize
-      );
+      state.pagination.page = 1;
     },
-
-    // ── Pagination ─────────────────────────────────────────────────────────
     nextPage: (state) => {
-      const { page, pageSize, total } = state.pagination;
-      const nextPage = page + 1;
-      if (nextPage * pageSize - pageSize < total) {
-        state.pagination = computePagination(total, nextPage, pageSize);
+      const next = state.pagination.page + 1;
+      if (next > state.pagination.totalPages) {
+        return;
       }
+
+      state.pagination.page = next;
+      const queryKey = buildPaginationCacheKey({ search: state.searchQuery });
+      syncCachedPage(state, next, queryKey);
     },
     prevPage: (state) => {
-      const { page, pageSize, total } = state.pagination;
-      if (page > 1) {
-        state.pagination = computePagination(total, page - 1, pageSize);
+      const prev = state.pagination.page - 1;
+      if (prev < 1) {
+        return;
       }
+
+      state.pagination.page = prev;
+      const queryKey = buildPaginationCacheKey({ search: state.searchQuery });
+      syncCachedPage(state, prev, queryKey);
     },
 
-    // ── Current patient ────────────────────────────────────────────────────
     setCurrentPatient: (state, action) => {
       state.currentPatient = action.payload;
     },
@@ -182,6 +201,7 @@ export const {
   fetchPatientsRequest,
   fetchPatientsSuccess,
   fetchPatientsFailure,
+  hydratePatientsFromCache,
   fetchPatientByIdRequest,
   fetchPatientByIdSuccess,
   fetchPatientByIdFailure,

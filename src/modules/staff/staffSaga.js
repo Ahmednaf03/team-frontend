@@ -1,4 +1,4 @@
-import { call, put, takeLatest, takeEvery } from 'redux-saga/effects';
+import { call, put, takeLatest, takeEvery, select } from 'redux-saga/effects';
 import {
   fetchAllStaffAPI,
   fetchStaffByIdAPI,
@@ -6,11 +6,12 @@ import {
   updateStaffAPI,
   deleteStaffAPI,
 } from './staffAPI';
-
+import { buildPaginationCacheKey } from '../../utils/paginationCache';
 import {
   fetchStaffRequest,
   fetchStaffSuccess,
   fetchStaffFailure,
+  hydrateStaffFromCache,
   fetchStaffByIdRequest,
   fetchStaffByIdSuccess,
   fetchStaffByIdFailure,
@@ -25,19 +26,97 @@ import {
   deleteStaffFailure,
 } from './staffSlice';
 
-// ── Fetch All ────────────────────────────────────────────────────────────────
-function* handleFetchStaff() {
+const applyFilters = (staff, searchQuery, roleFilter, statusFilter) => {
+  const q = searchQuery.toLowerCase().trim();
+
+  return staff.filter((member) => {
+    const matchSearch =
+      !q ||
+      member.name?.toLowerCase().includes(q) ||
+      member.email?.toLowerCase().includes(q) ||
+      member.role?.toLowerCase().includes(q);
+    const matchRole = roleFilter === 'all' || member.role === roleFilter;
+    const matchStatus = statusFilter === 'all' || member.status === statusFilter;
+    return matchSearch && matchRole && matchStatus;
+  });
+};
+
+const buildFallbackPage = (items, page, pageSize) => {
+  const totalRecords = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startIdx = (page - 1) * pageSize;
+
+  return {
+    data: items.slice(startIdx, startIdx + pageSize),
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalRecords,
+      perPage: pageSize,
+    },
+  };
+};
+
+function* handleFetchStaff(action) {
   try {
-    const envelope = yield call(fetchAllStaffAPI);
-    const staff = envelope.data;
-    yield put(fetchStaffSuccess(Array.isArray(staff) ? staff : []));
+    const { pagination, searchQuery, roleFilter, statusFilter } = yield select(
+      (state) => state.staff
+    );
+    const requestedPage = action.payload?.page ?? pagination.page;
+    const prefetch = Boolean(action.payload?.prefetch);
+    const force = Boolean(action.payload?.force);
+    const queryKey = buildPaginationCacheKey({
+      search: searchQuery,
+      role: roleFilter,
+      status: statusFilter,
+    });
+    const cachedPage = yield select(
+      (state) => state.staff.pageCache[queryKey]?.[requestedPage]
+    );
+
+    if (cachedPage && !force) {
+      if (!prefetch) {
+        yield put(hydrateStaffFromCache({ page: requestedPage, queryKey }));
+      }
+      return;
+    }
+
+    const params = {
+      page: requestedPage,
+      per_page: pagination.pageSize,
+      ...(searchQuery && { search: searchQuery }),
+      ...(roleFilter !== 'all' && { role: roleFilter }),
+      ...(statusFilter !== 'all' && { status: statusFilter }),
+    };
+
+    const envelope = yield call(fetchAllStaffAPI, params);
+    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
+    const paginatedPayload = envelope?.pagination
+      ? {
+          data: responseData,
+          pagination: envelope.pagination,
+        }
+      : buildFallbackPage(
+          applyFilters(responseData, searchQuery, roleFilter, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        );
+
+    yield put(
+      fetchStaffSuccess({
+        data: paginatedPayload.data,
+        pagination: paginatedPayload.pagination,
+        page: requestedPage,
+        queryKey,
+        prefetch,
+      })
+    );
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to fetch staff.';
-    yield put(fetchStaffFailure(message));
+    yield put(fetchStaffFailure({ message, prefetch: action.payload?.prefetch }));
   }
 }
 
-// ── Fetch By ID ──────────────────────────────────────────────────────────────
 function* handleFetchStaffById(action) {
   try {
     const envelope = yield call(fetchStaffByIdAPI, action.payload);
@@ -48,13 +127,11 @@ function* handleFetchStaffById(action) {
   }
 }
 
-// ── Create ───────────────────────────────────────────────────────────────────
 function* handleCreateStaff(action) {
   try {
     yield call(createStaffAPI, action.payload.data);
     yield put(createStaffSuccess());
-    // Refetch the full list to reflect the new member
-    yield put(fetchStaffRequest());
+    yield put(fetchStaffRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message =
@@ -63,12 +140,11 @@ function* handleCreateStaff(action) {
   }
 }
 
-// ── Update ───────────────────────────────────────────────────────────────────
 function* handleUpdateStaff(action) {
   try {
     yield call(updateStaffAPI, { id: action.payload.id, data: action.payload.data });
     yield put(updateStaffSuccess());
-    yield put(fetchStaffRequest());
+    yield put(fetchStaffRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message =
@@ -77,12 +153,11 @@ function* handleUpdateStaff(action) {
   }
 }
 
-// ── Delete (soft) ─────────────────────────────────────────────────────────────
 function* handleDeleteStaff(action) {
   try {
     yield call(deleteStaffAPI, action.payload.id);
     yield put(deleteStaffSuccess());
-    yield put(fetchStaffRequest());
+    yield put(fetchStaffRequest({ page: 1, force: true }));
     if (action.payload.onSuccess) action.payload.onSuccess();
   } catch (error) {
     const message =
@@ -91,7 +166,6 @@ function* handleDeleteStaff(action) {
   }
 }
 
-// ── Root Staff Saga ───────────────────────────────────────────────────────────
 export default function* staffSaga() {
   yield takeLatest(fetchStaffRequest.type, handleFetchStaff);
   yield takeLatest(fetchStaffByIdRequest.type, handleFetchStaffById);
