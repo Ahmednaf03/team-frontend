@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchAppointmentsRequest,
   fetchUpcomingRequest,
@@ -14,6 +14,7 @@ import {
   setPage,
   clearMessages,
 } from '../appointmentSlice';
+import { buildPaginationCacheKey } from '../../../utils/paginationCache';
 
 /**
  * useAppointments()
@@ -36,6 +37,7 @@ export default function useAppointments() {
 
   const {
     list: appointments,
+    pageCache,
     upcoming,
     selected,
     pagination,
@@ -46,9 +48,31 @@ export default function useAppointments() {
     success,
   } = useSelector((state) => state.appointments);
 
+  const cacheKey = useMemo(() => buildPaginationCacheKey(filters), [filters]);
+  const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
+
+  useEffect(() => {
+    const nextPage = pagination.currentPage + 1;
+
+    if (
+      !pagination.totalPages ||
+      nextPage > pagination.totalPages ||
+      cachedPages[nextPage]
+    ) {
+      return;
+    }
+
+    dispatch(fetchAppointmentsRequest({ page: nextPage, prefetch: true }));
+  }, [
+    cachedPages,
+    dispatch,
+    pagination.currentPage,
+    pagination.totalPages,
+  ]);
+
   // ── Data fetching ───────────────────────────────────────────────────────────
-  const fetchAppointments = useCallback(() => {
-    dispatch(fetchAppointmentsRequest());
+  const fetchAppointments = useCallback((options = {}) => {
+    dispatch(fetchAppointmentsRequest(options));
   }, [dispatch]);
 
   const fetchUpcoming = useCallback(() => {
@@ -104,20 +128,20 @@ export default function useAppointments() {
   const applyFilters = useCallback(
     (newFilters) => {
       dispatch(setFilters(newFilters));
-      dispatch(fetchAppointmentsRequest()); // auto-refetch on filter change
+      dispatch(fetchAppointmentsRequest({ page: 1 })); // auto-refetch on filter change
     },
     [dispatch]
   );
 
   const resetFilters = useCallback(() => {
     dispatch(clearFilters());
-    dispatch(fetchAppointmentsRequest());
+    dispatch(fetchAppointmentsRequest({ page: 1 }));
   }, [dispatch]);
 
   const goToPage = useCallback(
     (page) => {
       dispatch(setPage(page));
-      dispatch(fetchAppointmentsRequest());
+      dispatch(fetchAppointmentsRequest({ page }));
     },
     [dispatch]
   );
