@@ -5,11 +5,13 @@ import { selectIsLoggedIn, selectAuthInitialized } from '../modules/auth/selecto
 import useIdleLogout from '../hooks/useIdleLogout';
 import ProtectedRoute from './ProtectedRoute';
 import RoleBasedRoute from './RoleBasedRoute';
+// import PatientProfile from '../pages/Auth/PatientProfile';
 // 1. Import the Layout component
 import Layout from '../components/layout/Layout';
 
 // Auth pages — eagerly loaded (needed on every first visit)
 import LoginPage from '../pages/Auth/LoginPage';
+import PatientLoginPage from '../pages/Auth/PatientLoginPage'; // ← ADD THIS
 import Prescriptions from '../pages/Prescriptions/Prescriptions';
 
 // All post-login pages — lazy loaded (teammates fill these in)
@@ -47,9 +49,6 @@ export default function AppRouter({ tenantConfig }) {
   const isLoggedIn  = useSelector(selectIsLoggedIn);
   const initialized = useSelector(selectAuthInitialized);
 
-  //  const brokenGlobalState = null;
-  //   const forceCrash = brokenGlobalState.thisWillDestroyTheRouter;
-
   // On mount: silently attempt token refresh to restore session from cookie
   useEffect(() => {
     dispatch({ type: 'auth/sessionCheck' });
@@ -77,6 +76,22 @@ export default function AppRouter({ tenantConfig }) {
               )
             }
           />
+
+          {/* ── Patient Portal — public, no auth required ────────────────── */}
+          <Route
+            path="/patient-login"
+            element={
+              isLoggedIn ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <PatientLoginPage />
+              )
+            }
+          />
+
+          <Route path="/patient-profile" element={<PatientProfile />} />
+  
+
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* ── Protected (any authenticated role) ──────────────────────── */}
@@ -119,7 +134,6 @@ export default function AppRouter({ tenantConfig }) {
                 }
               >
                 <Route path="/prescriptions" element={<Prescriptions />} />
-                {/* <Route path="/appointments/calendar" element={<AppointmentCalendar />} /> */}
               </Route>
 
               {/* Billing — Admin, Provider */}

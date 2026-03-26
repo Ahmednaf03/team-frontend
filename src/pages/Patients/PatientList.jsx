@@ -253,8 +253,8 @@ const Avatar = styled.div`
     $gender === 'Female'
       ? 'linear-gradient(135deg, #ec4899, #f472b6)'
       : $gender === 'Male'
-      ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
-      : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
+        ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
+        : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -289,16 +289,16 @@ const ActionBtn = styled.button`
   border-radius: 8px;
   border: 1.5px solid ${({ $variant }) =>
     $variant === 'view' ? '#e0e7ff' :
-    $variant === 'edit' ? '#fef3c7' :
-    '#fee2e2'};
+      $variant === 'edit' ? '#fef3c7' :
+        '#fee2e2'};
   background: ${({ $variant }) =>
     $variant === 'view' ? '#eef2ff' :
-    $variant === 'edit' ? '#fffbeb' :
-    '#fef2f2'};
+      $variant === 'edit' ? '#fffbeb' :
+        '#fef2f2'};
   color: ${({ $variant }) =>
     $variant === 'view' ? '#6366f1' :
-    $variant === 'edit' ? '#d97706' :
-    '#ef4444'};
+      $variant === 'edit' ? '#d97706' :
+        '#ef4444'};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -309,9 +309,9 @@ const ActionBtn = styled.button`
   &:hover {
     transform: scale(1.1);
     border-color: ${({ $variant }) =>
-      $variant === 'view' ? '#6366f1' :
+    $variant === 'view' ? '#6366f1' :
       $variant === 'edit' ? '#d97706' :
-      '#ef4444'};
+        '#ef4444'};
   }
 `;
 
@@ -476,7 +476,7 @@ const FormInput = styled.input`
   &:focus {
     border-color: ${({ $error, theme }) => ($error ? '#ef4444' : theme.colors.primary)};
     box-shadow: 0 0 0 3px ${({ $error }) =>
-      $error ? 'rgba(239,68,68,0.12)' : 'rgba(37,99,235,0.12)'};
+    $error ? 'rgba(239,68,68,0.12)' : 'rgba(37,99,235,0.12)'};
   }
 `;
 
@@ -561,8 +561,8 @@ const ViewAvatar = styled.div`
     $gender === 'Female'
       ? 'linear-gradient(135deg, #ec4899, #f472b6)'
       : $gender === 'Male'
-      ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
-      : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
+        ? 'linear-gradient(135deg, #3b82f6, #60a5fa)'
+        : 'linear-gradient(135deg, #8b5cf6, #a78bfa)'};
   display: flex;
   align-items: center;
   justify-content: center;
@@ -592,15 +592,29 @@ const diagnosisColor = (d) => {
 
 const EMPTY_FORM = {
   name: '', age: '', gender: '', phone: '', address: '', diagnosis: '',
+  email: '', password: '',
 };
 
-const validateForm = (data) => {
+const validateForm = (data, modalMode = 'create') => {
   const errors = {};
   if (!data.name?.trim()) errors.name = 'Name is required';
   if (!data.age || isNaN(Number(data.age)) || Number(data.age) <= 0)
     errors.age = 'Valid age required';
   if (!data.gender) errors.gender = 'Gender is required';
   if (!data.phone?.trim()) errors.phone = 'Phone is required';
+  if (modalMode === 'create') {
+    if (!data.email?.trim()) {
+      errors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(data.email)) {
+      errors.email = 'Invalid email';
+    }
+
+    if (!data.password?.trim()) {
+      errors.password = 'Password is required';
+    } else if (data.password.length < 6) {
+      errors.password = 'Min 6 chars';
+    }
+  }
   return errors;
 };
 
@@ -662,6 +676,8 @@ const PatientList = () => {
       phone: patient.phone || '',
       address: patient.address || '',
       diagnosis: patient.diagnosis || '',
+      email: patient.email || '',
+      password: '',
     });
     setFormErrors({});
     setSelectedPatient(patient);
@@ -688,10 +704,14 @@ const PatientList = () => {
   // ── Submit ───────────────────────────────────────────────────────────────
   const handleSubmit = (e) => {
     e.preventDefault();
-    const errors = validateForm(formData);
+    const errors = validateForm(formData, modalMode);
     if (Object.keys(errors).length) { setFormErrors(errors); return; }
 
-    const payload = { ...formData, age: Number(formData.age) };
+    const payload = { ...formData, age: Number(formData.age), role: 'patient' };
+    if (modalMode === 'edit') {
+      delete payload.password;
+      delete payload.email;
+    }
 
     if (modalMode === 'create') {
       createPatient(payload, () => {
@@ -781,8 +801,8 @@ const PatientList = () => {
                       {searchQuery
                         ? 'Try a different name, phone, or diagnosis.'
                         : isAdmin
-                        ? 'Click "Add Patient" to register the first patient.'
-                        : 'No patients have been registered yet.'}
+                          ? 'Click "Add Patient" to register the first patient.'
+                          : 'No patients have been registered yet.'}
                     </EmptyDesc>
                   </EmptyState>
                 </td>
@@ -953,6 +973,38 @@ const PatientList = () => {
               {formErrors.phone && <FieldError>{formErrors.phone}</FieldError>}
             </FormGroup>
           </FormRow>
+
+          {modalMode === 'create' && (
+            <FormRow>
+              <FormGroup>
+                <FormLabel>
+                  Email <span className="req">*</span>
+                </FormLabel>
+                <FormInput
+                  type="email"
+                  $error={!!formErrors.email}
+                  value={formData.email}
+                  onChange={handleChange('email')}
+                  placeholder="e.g. john@example.com"
+                />
+                {formErrors.email && <FieldError>{formErrors.email}</FieldError>}
+              </FormGroup>
+              
+              <FormGroup>
+                <FormLabel>
+                  Password <span className="req">*</span>
+                </FormLabel>
+                <FormInput
+                  type="password"
+                  $error={!!formErrors.password}
+                  value={formData.password}
+                  onChange={handleChange('password')}
+                  placeholder="••••••••"
+                />
+                {formErrors.password && <FieldError>{formErrors.password}</FieldError>}
+              </FormGroup>
+            </FormRow>
+          )}
 
           <FormGroup>
             <FormLabel>Address</FormLabel>
