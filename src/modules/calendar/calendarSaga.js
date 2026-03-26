@@ -1,6 +1,7 @@
-import { call, put, takeLatest, select, race, delay } from 'redux-saga/effects';
+import { all, call, put, takeLatest, select, race, delay } from 'redux-saga/effects';
 import { enrichAppointment } from '../../utils/appointmentMapping';
 import { fetchCalendarDataAPI, rescheduleAppointmentAPI } from './calendarAPI';
+import { fetchAppointmentMessagesAPI } from '../chat/chatAPI';
 import {
   fetchCalendarDataRequest,
   fetchCalendarDataSuccess,
@@ -8,6 +9,7 @@ import {
   rescheduleAppointmentRequest,
   rescheduleAppointmentSuccess,
   rescheduleAppointmentFailure,
+  updateCalendarNotesPreview,
 } from './calendarSlice';
 import {
   createAppointmentSuccess,
@@ -15,6 +17,25 @@ import {
   cancelAppointmentSuccess,
   deleteAppointmentSuccess,
 } from '../appointments/appointmentSlice';
+
+const extractMessages = (payload) => {
+  const data = payload?.data ?? payload;
+  return Array.isArray(data) ? data : [];
+};
+
+const resolveLatestThreadNote = async (appointment) => {
+  try {
+    const response = await fetchAppointmentMessagesAPI(appointment.id);
+    const messages = extractMessages(response);
+    const latestMessage = messages[messages.length - 1];
+
+    return latestMessage?.message
+      ? { appointmentId: appointment.id, notes: latestMessage.message }
+      : null;
+  } catch (error) {
+    return null;
+  }
+};
 
 // ── Fetch calendar data ───────────────────────────────────────────────────────
 function* handleFetchCalendarData() {
@@ -39,8 +60,22 @@ function* handleFetchCalendarData() {
 
     const raw = response.data ?? response;
     const enriched = Array.isArray(raw) ? raw.map(enrichAppointment) : [];
+    const latestNotesByAppointment = yield all(
+      enriched.map((appointment) => call(resolveLatestThreadNote, appointment))
+    );
+    const latestNotesMap = latestNotesByAppointment.reduce((acc, entry) => {
+      if (entry?.appointmentId && typeof entry.notes === 'string') {
+        acc[entry.appointmentId] = entry.notes;
+      }
+      return acc;
+    }, {});
+    const hydrated = enriched.map((appointment) =>
+      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
+        ? { ...appointment, notes: latestNotesMap[appointment.id] }
+        : appointment
+    );
 
-    yield put(fetchCalendarDataSuccess(enriched));
+    yield put(fetchCalendarDataSuccess(hydrated));
   } catch (error) {
     const message =
       error.response?.data?.message || 'Failed to load calendar data.';
