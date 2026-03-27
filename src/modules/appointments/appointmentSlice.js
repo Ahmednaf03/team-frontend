@@ -315,6 +315,7 @@ const appointmentSlice = createSlice({
       state.error = null;
       state.success = null;
     },
+    resetAppointmentsState: () => initialState,
     updateAppointmentNotesPreview: (state, action) => {
       const { appointmentId, notes } = action.payload;
       state.list = state.list.map((appointment) =>
@@ -370,6 +371,7 @@ export const {
   clearFilters,
   setPage,
   clearMessages,
+  resetAppointmentsState,
   updateAppointmentNotesPreview,
 } = appointmentSlice.actions;
 

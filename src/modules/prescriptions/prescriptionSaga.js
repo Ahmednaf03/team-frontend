@@ -8,6 +8,7 @@ import {
   dispensePrescriptionAPI,
 } from './prescriptionAPI';
 import { buildPaginationCacheKey } from '../../utils/paginationCache';
+import { extractCollection } from '../../utils/appointmentMapping';
 import {
   fetchPrescriptionsRequest,
   fetchPrescriptionsSuccess,
@@ -32,6 +33,43 @@ import {
   dispenseSuccess,
   dispenseFailure,
 } from './prescriptionSlice';
+
+const getPrescriptionDoctorId = (prescription) =>
+  Number(
+    prescription?.doctor_id ??
+      prescription?.doctor?.id ??
+      prescription?.provider?.id ??
+      prescription?.staff?.id
+  );
+
+const getProviderScopeId = (currentUser) => Number(currentUser?.id);
+
+const scopeProviderPrescriptions = (prescriptions, currentUser) => {
+  if (!Array.isArray(prescriptions)) {
+    return [];
+  }
+
+  const providerId = getProviderScopeId(currentUser);
+
+  if (!Number.isFinite(providerId)) {
+    return prescriptions;
+  }
+
+  return prescriptions.filter(
+    (prescription) => getPrescriptionDoctorId(prescription) === providerId
+  );
+};
+
+function* fetchPrescriptionsEnvelope(params, isProvider) {
+  const primaryEnvelope = yield call(fetchAllPrescriptionsAPI, params);
+
+  if (!isProvider || Array.isArray(primaryEnvelope?.data) && primaryEnvelope.data.length > 0) {
+    return primaryEnvelope;
+  }
+
+  const { doctor_id, ...fallbackParams } = params;
+  return yield call(fetchAllPrescriptionsAPI, fallbackParams);
+}
 
 const applyFilters = (prescriptions, searchQuery, statusFilter) => {
   let result = prescriptions;
@@ -90,6 +128,7 @@ function* handleFetchPrescriptions(action) {
     const currentUser = yield select((state) => state.auth.user);
     const currentRole = String(currentUser?.role || '').toLowerCase();
     const isProvider = currentRole === 'provider';
+    const providerScopeId = getProviderScopeId(currentUser);
     const requestedPage = action.payload?.page ?? pagination.page;
     const force = Boolean(action.payload?.force);
     const queryKey = buildPrescriptionQueryKey(searchQuery, statusFilter, currentUser);
@@ -107,15 +146,13 @@ function* handleFetchPrescriptions(action) {
       per_page: isProvider ? 500 : pagination.pageSize,
       ...(searchQuery && { search: searchQuery }),
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
-      ...(isProvider && currentUser?.id && { doctor_id: currentUser.id }),
+      ...(isProvider && Number.isFinite(providerScopeId) && { doctor_id: providerScopeId }),
     };
 
-    const envelope = yield call(fetchAllPrescriptionsAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
+    const envelope = yield call(fetchPrescriptionsEnvelope, params, isProvider);
+    const responseData = extractCollection(envelope);
     const scopedData = isProvider
-      ? responseData.filter(
-          (prescription) => Number(prescription?.doctor_id) === Number(currentUser?.id)
-        )
+      ? scopeProviderPrescriptions(responseData, currentUser)
       : responseData;
     const paginatedPayload = isProvider
       ? buildFallbackPage(
@@ -156,6 +193,7 @@ function* handlePrefetchPrescriptions(action) {
     const currentUser = yield select((state) => state.auth.user);
     const currentRole = String(currentUser?.role || '').toLowerCase();
     const isProvider = currentRole === 'provider';
+    const providerScopeId = getProviderScopeId(currentUser);
     const requestedPage = action.payload?.page;
     const queryKey =
       action.payload?.queryKey ??
@@ -179,15 +217,13 @@ function* handlePrefetchPrescriptions(action) {
       per_page: isProvider ? 500 : pagination.pageSize,
       ...(searchQuery && { search: searchQuery }),
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
-      ...(isProvider && currentUser?.id && { doctor_id: currentUser.id }),
+      ...(isProvider && Number.isFinite(providerScopeId) && { doctor_id: providerScopeId }),
     };
 
-    const envelope = yield call(fetchAllPrescriptionsAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
+    const envelope = yield call(fetchPrescriptionsEnvelope, params, isProvider);
+    const responseData = extractCollection(envelope);
     const scopedData = isProvider
-      ? responseData.filter(
-          (prescription) => Number(prescription?.doctor_id) === Number(currentUser?.id)
-        )
+      ? scopeProviderPrescriptions(responseData, currentUser)
       : responseData;
     const paginatedPayload = isProvider
       ? buildFallbackPage(

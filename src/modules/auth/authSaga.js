@@ -1,6 +1,8 @@
 import { call, put, takeLatest } from 'redux-saga/effects';
 import { jwtDecode } from 'jwt-decode';
 import { loginAPI, logoutAPI, refreshTokenAPI, changePasswordAPI } from './authAPI';
+import { resetAppointmentsState } from '../appointments/appointmentSlice';
+import { resetPrescriptionsState } from '../prescriptions/prescriptionSlice';
 import {
   loginRequest,
   loginSuccess,
@@ -13,6 +15,31 @@ import {
   changePasswordFailure,
 } from './authSlice';
 
+const buildUserFromToken = (decodedToken = {}) => ({
+  ...decodedToken,
+  id:
+    decodedToken.user_id ??
+    decodedToken.id ??
+    null,
+  role: decodedToken.role,
+  tenant_id:
+    decodedToken.tenant_id ??
+    decodedToken.tenantId ??
+    null,
+  doctor_id:
+    decodedToken.doctor_id ??
+    decodedToken.doctorId ??
+    null,
+  provider_id:
+    decodedToken.provider_id ??
+    decodedToken.providerId ??
+    null,
+  staff_id:
+    decodedToken.staff_id ??
+    decodedToken.staffId ??
+    null,
+});
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 function* handleLogin(action) {
   try {
@@ -23,11 +50,7 @@ function* handleLogin(action) {
 
     // 2. Decode the token to guarantee we get the user data (including role)
     const decodedToken = jwtDecode(access_token);
-    const user = {
-      id: decodedToken.user_id,
-      role: decodedToken.role,
-      tenant_id: decodedToken.tenant_id
-    };
+    const user = buildUserFromToken(decodedToken);
 
     localStorage.setItem('access_token', access_token);
     if (csrf_token) {
@@ -55,6 +78,8 @@ function* handleLogout() {
     localStorage.removeItem('access_token');
     sessionStorage.removeItem('csrf_token');
     yield put(logoutSuccess());
+    yield put(resetAppointmentsState());
+    yield put(resetPrescriptionsState());
   }
 }
 
@@ -80,11 +105,7 @@ function* handleSessionCheck() {
       // ==========================================
       // SCENARIO A: Token is still valid!
       // ==========================================
-      const user = {
-        id: decodedToken.user_id,
-        role: decodedToken.role,
-        tenant_id: decodedToken.tenant_id
-      };
+      const user = buildUserFromToken(decodedToken);
       
       // Instantly restore the session without hitting the backend
       yield put(loginSuccess({ access_token: storedToken, csrf_token: csrfToken, user }));
@@ -97,11 +118,7 @@ function* handleSessionCheck() {
       const { access_token, csrf_token } = response.data;
 
       const newDecodedToken = jwtDecode(access_token);
-      const user = {
-        id: newDecodedToken.user_id,
-        role: newDecodedToken.role,
-        tenant_id: newDecodedToken.tenant_id
-      };
+      const user = buildUserFromToken(newDecodedToken);
 
       localStorage.setItem('access_token', access_token);
       if (csrf_token) sessionStorage.setItem('csrf_token', csrf_token);

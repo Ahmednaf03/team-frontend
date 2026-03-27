@@ -258,6 +258,7 @@ const prescriptionSlice = createSlice({
     clearSuccess: (state) => {
       state.success = null;
     },
+    resetPrescriptionsState: () => initialState,
   },
 });
 
@@ -292,6 +293,7 @@ export const {
   clearCurrentPrescription,
   clearError,
   clearSuccess,
+  resetPrescriptionsState,
 } = prescriptionSlice.actions;
 
 export default prescriptionSlice.reducer;
