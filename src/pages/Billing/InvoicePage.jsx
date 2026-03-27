@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import styled, { keyframes } from 'styled-components';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import styled, { keyframes, useTheme } from 'styled-components';
 import { useSelector } from 'react-redux';
+import { toast } from 'react-hot-toast';
 import {
   Receipt,
   Search,
   CheckCircle,
   Clock,
-  TrendingUp,
   FilePlus,
   X,
   AlertCircle,
@@ -14,6 +14,9 @@ import {
   ChevronRight,
   BadgeDollarSign,
   FileText,
+  Download,
+  Wallet,
+  Building2,
 } from 'lucide-react';
 import useBilling from '../../modules/billing/hooks/useBilling';
 import useAppointmentReferenceData from '../Appointments/useAppointmentReferenceData';
@@ -468,7 +471,75 @@ const SubmitBtn = styled.button`
   &:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
+const PreviewFrame = styled.iframe`
+  width: 100%;
+  min-height: 62vh;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 12px;
+  background: #fff;
+`;
+
+const SelectInput = styled.select`
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.background};
+  color: ${({ theme }) => theme.colors.text};
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+
+  &:focus { border-color: ${({ theme }) => theme.colors.primary}; }
+`;
+
+const PaymentInfoGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+`;
+
+const PaymentInfoCard = styled.div`
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.background};
+`;
+
+const PaymentInfoLabel = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const PaymentInfoValue = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text};
+`;
+
+const ActionStack = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`;
+
+const DownloadBtn = styled(ActionBtn)`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`;
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
+
+const PAYMENT_META_STORAGE_KEY = 'ehr_invoice_payment_meta';
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
@@ -482,11 +553,61 @@ const formatDate = (dateStr) => {
   });
 };
 
+const titleCase = (value = '') =>
+  value
+    .split(/[\s-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const getHospitalNameFromSubdomain = () => {
+  if (typeof window === 'undefined') return 'Hospital Workspace';
+
+  const hostname = window.location.hostname || '';
+  const subdomain = hostname.split('.')[0] || '';
+  const baseName = titleCase(subdomain);
+
+  if (!baseName || baseName.toLowerCase() === 'localhost') {
+    return 'Hospital Workspace';
+  }
+
+  if (/(hospital|clinic|care|health)/i.test(baseName)) {
+    return baseName;
+  }
+
+  return `${baseName} Hospital`;
+};
+
+const generatePaymentReference = () =>
+  `PAY-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+
+const loadPaymentMetadata = () => {
+  if (typeof window === 'undefined') return {};
+
+  try {
+    const raw = window.localStorage.getItem(PAYMENT_META_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    return {};
+  }
+};
+
+const persistPaymentMetadata = (data) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(PAYMENT_META_STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    // Ignore localStorage write failures.
+  }
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const InvoicePage = () => {
   const userRole = useSelector((state) => state.auth.user?.role);
-  const canMarkPaid = false;
+  const theme = useTheme();
+  const canMarkPaid = userRole === 'pharmacist';
   const { patientLookup } = useAppointmentReferenceData();
   const {
     invoices,
@@ -495,6 +616,7 @@ const InvoicePage = () => {
     summaryLoading,
     submitting,
     error,
+    success,
     statusFilter,
     searchQuery,
     page,
@@ -512,32 +634,191 @@ const InvoicePage = () => {
     goNext,
     goPrev,
     dismissError,
+    dismissSuccess,
   } = useBilling();
 
   const [showModal, setShowModal] = useState(false);
   const [prescriptionId, setPrescriptionId] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [previewInvoice, setPreviewInvoice] = useState(null);
+  const [previewHtml, setPreviewHtml] = useState('');
+  const [paymentForm, setPaymentForm] = useState({
+    paymentMode: 'Cash',
+    paymentRef: generatePaymentReference(),
+  });
+  const [paymentMetadata, setPaymentMetadata] = useState(() => loadPaymentMetadata());
+  const pendingPaymentRef = useRef(null);
+  const hospitalName = useMemo(() => getHospitalNameFromSubdomain(), []);
 
   useEffect(() => {
     fetchInvoices();
     fetchSummary();
   }, [fetchInvoices, fetchSummary]);
 
-  const handleGenerate = () => {
-    if (!prescriptionId.trim()) return;
-    generateInvoice(prescriptionId.trim(), () => {
+  useEffect(() => {
+    if (!success?.type) {
+      return;
+    }
+
+    if (success.type === 'generateInvoice') {
+      toast.success('Invoice generated successfully.');
       setShowModal(false);
       setPrescriptionId('');
-    });
+    }
+
+    if (success.type === 'markPaid') {
+      if (
+        pendingPaymentRef.current &&
+        Number(pendingPaymentRef.current.invoiceId) === Number(success.invoiceId)
+      ) {
+        const committedRecord = pendingPaymentRef.current;
+        setPaymentMetadata((prev) => {
+          const next = {
+            ...prev,
+            [String(success.invoiceId)]: committedRecord,
+          };
+          persistPaymentMetadata(next);
+          return next;
+        });
+
+        setPreviewInvoice((prevInvoice) =>
+          prevInvoice && Number(prevInvoice.id) === Number(success.invoiceId)
+            ? { ...prevInvoice, status: 'PAID', paid_at: committedRecord.paidAt }
+            : prevInvoice
+        );
+      }
+
+      toast.success('Invoice marked as paid.');
+      pendingPaymentRef.current = null;
+      setShowPaymentModal(false);
+      setSelectedInvoice(null);
+    }
+
+    dismissSuccess();
+  }, [dismissSuccess, success]);
+
+  const handleGenerate = () => {
+    if (!prescriptionId.trim()) return;
+    generateInvoice(prescriptionId.trim());
   };
 
-  const handleMarkPaid = (invoiceId) => {
-    markAsPaid(invoiceId);
+  const handleOpenPaymentModal = (invoice) => {
+    setSelectedInvoice(invoice);
+    setPaymentForm({
+      paymentMode: 'Cash',
+      paymentRef: generatePaymentReference(),
+    });
+    setShowPaymentModal(true);
+  };
+
+  const handleMarkPaid = () => {
+    if (!selectedInvoice) return;
+
+    pendingPaymentRef.current = {
+      invoiceId: selectedInvoice.id,
+      paymentMode: paymentForm.paymentMode,
+      paymentRef: paymentForm.paymentRef,
+      hospitalName,
+      totalAmount: selectedInvoice.total_amount,
+      paidAt: new Date().toISOString(),
+    };
+
+    markAsPaid(selectedInvoice.id);
   };
 
   const resolvePatientName = (invoice) =>
     invoice.patient_name ||
     patientLookup?.[invoice.patient_id] ||
     `Patient #${invoice.patient_id ?? '—'}`;
+
+  const getInvoicePaymentRecord = (invoice) => {
+    const stored = paymentMetadata[String(invoice.id)];
+    const pendingForInvoice =
+      pendingPaymentRef.current &&
+      Number(pendingPaymentRef.current.invoiceId) === Number(invoice.id)
+        ? pendingPaymentRef.current
+        : null;
+
+    if (pendingForInvoice) {
+      return pendingForInvoice;
+    }
+
+    if (stored) {
+      return stored;
+    }
+
+    return {
+      invoiceId: invoice.id,
+      paymentMode: invoice.payment_mode || (invoice.status === 'PAID' ? 'Recorded Payment' : 'Pending'),
+      paymentRef: invoice.payment_ref || `PAY-${String(invoice.id).padStart(4, '0')}`,
+      hospitalName,
+      totalAmount: invoice.total_amount,
+      paidAt: invoice.paid_at || null,
+    };
+  };
+
+  const buildInvoiceHtml = (invoice) => {
+    const paymentRecord = getInvoicePaymentRecord(invoice);
+    const patientName = resolvePatientName(invoice);
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Invoice ${invoice.id}</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: ${theme.colors.background}; color: ${theme.colors.text}; padding: 32px; }
+    .sheet { max-width: 760px; margin: 0 auto; background: ${theme.colors.surface}; border: 1px solid ${theme.colors.border}; border-radius: 16px; padding: 28px; }
+    .title { font-size: 28px; font-weight: 700; margin-bottom: 6px; color: ${theme.colors.primary}; }
+    .sub { color: ${theme.colors.textSecondary}; margin-bottom: 22px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+    .card { border: 1px solid ${theme.colors.border}; border-radius: 12px; padding: 14px; background: ${theme.colors.background}; }
+    .label { font-size: 12px; color: ${theme.colors.textSecondary}; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .value { font-size: 16px; font-weight: 600; color: ${theme.colors.text}; }
+    .hero { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 22px; }
+    .amount { font-size: 30px; font-weight: 800; color: ${theme.colors.text}; }
+    .status { display:inline-block; padding: 6px 12px; border-radius: 999px; background: ${invoice.status === 'PAID' ? '#d1fae5' : '#fef3c7'}; color: ${invoice.status === 'PAID' ? '#065f46' : '#92400e'}; font-weight: 700; font-size: 12px; }
+    .footer { margin-top: 24px; color: ${theme.colors.textSecondary}; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="hero">
+      <div>
+        <div class="title">${paymentRecord.hospitalName}</div>
+        <div class="sub">Patient billing invoice</div>
+      </div>
+      <div>
+        <div class="status">${invoice.status}</div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="label">Invoice ID</div><div class="value">${invoice.id}</div></div>
+      <div class="card"><div class="label">Prescription</div><div class="value">RX-${invoice.prescription_id}</div></div>
+      <div class="card"><div class="label">Patient</div><div class="value">${patientName}</div></div>
+      <div class="card"><div class="label">Amount</div><div class="value">${formatCurrency(invoice.total_amount)}</div></div>
+      <div class="card"><div class="label">Payment Mode</div><div class="value">${paymentRecord.paymentMode}</div></div>
+      <div class="card"><div class="label">Payment Ref ID</div><div class="value">${paymentRecord.paymentRef}</div></div>
+      <div class="card"><div class="label">Created On</div><div class="value">${formatDate(invoice.created_at)}</div></div>
+      <div class="card"><div class="label">Paid On</div><div class="value">${formatDate(paymentRecord.paidAt || invoice.paid_at)}</div></div>
+    </div>
+    <div class="amount">${formatCurrency(invoice.total_amount)}</div>
+    <div class="footer">Generated for ${patientName} by ${paymentRecord.hospitalName}.</div>
+  </div>
+</body>
+</html>`;
+  };
+
+  const handleDownloadInvoice = (invoice) => {
+    setPreviewInvoice(invoice);
+    setPreviewHtml(buildInvoiceHtml(invoice));
+  };
+
+  const handlePrintPreview = () => {
+    const iframe = document.getElementById('billing-invoice-preview-frame');
+    iframe?.contentWindow?.focus();
+    iframe?.contentWindow?.print();
+  };
 
   return (
     <Page>
@@ -699,20 +980,28 @@ const InvoicePage = () => {
                   <Td>{formatDate(inv.paid_at)}</Td>
                   <Td>
                     {inv.status === 'PENDING' && canMarkPaid ? (
-                      <ActionBtn
-                        onClick={() => handleMarkPaid(inv.id)}
-                        disabled={submitting}
-                      >
-                        Mark Paid
-                      </ActionBtn>
+                      <ActionStack>
+                        <ActionBtn
+                          onClick={() => handleOpenPaymentModal(inv)}
+                          disabled={submitting}
+                        >
+                          Mark Paid
+                        </ActionBtn>
+                      </ActionStack>
                     ) : inv.status === 'PENDING' ? (
                       <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
                         Pending
                       </span>
                     ) : (
-                      <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 600 }}>
-                        ✓ Paid
-                      </span>
+                      <ActionStack>
+                        <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 600 }}>
+                          ✓ Paid
+                        </span>
+                        <DownloadBtn onClick={() => handleDownloadInvoice(inv)}>
+                          <Download size={14} />
+                          Download
+                        </DownloadBtn>
+                      </ActionStack>
                     )}
                   </Td>
                 </Tr>
@@ -769,6 +1058,125 @@ const InvoicePage = () => {
                 disabled={submitting || !prescriptionId.trim()}
               >
                 {submitting ? 'Generating…' : 'Generate'}
+              </SubmitBtn>
+            </ModalActions>
+          </ModalBox>
+        </ModalOverlay>
+      )}
+
+      {showPaymentModal && selectedInvoice && (
+        <ModalOverlay
+          onClick={(e) =>
+            e.target === e.currentTarget && !submitting && setShowPaymentModal(false)
+          }
+        >
+          <ModalBox>
+            <ModalTitle>Mark Invoice Paid</ModalTitle>
+            <ModalSubtitle>
+              Confirm payment details before updating the invoice status.
+            </ModalSubtitle>
+
+            <PaymentInfoGrid>
+              <PaymentInfoCard>
+                <PaymentInfoLabel>
+                  <Receipt size={14} />
+                  Invoice ID
+                </PaymentInfoLabel>
+                <PaymentInfoValue>{selectedInvoice.id}</PaymentInfoValue>
+              </PaymentInfoCard>
+              <PaymentInfoCard>
+                <PaymentInfoLabel>
+                  <Building2 size={14} />
+                  Hospital
+                </PaymentInfoLabel>
+                <PaymentInfoValue>{hospitalName}</PaymentInfoValue>
+              </PaymentInfoCard>
+              <PaymentInfoCard>
+                <PaymentInfoLabel>
+                  <Wallet size={14} />
+                  Total Amount
+                </PaymentInfoLabel>
+                <PaymentInfoValue>{formatCurrency(selectedInvoice.total_amount)}</PaymentInfoValue>
+              </PaymentInfoCard>
+              <PaymentInfoCard>
+                <PaymentInfoLabel>
+                  <FileText size={14} />
+                  Patient
+                </PaymentInfoLabel>
+                <PaymentInfoValue>{resolvePatientName(selectedInvoice)}</PaymentInfoValue>
+              </PaymentInfoCard>
+            </PaymentInfoGrid>
+
+            <Label>Payment Mode</Label>
+            <SelectInput
+              value={paymentForm.paymentMode}
+              onChange={(e) =>
+                setPaymentForm((prev) => ({ ...prev, paymentMode: e.target.value }))
+              }
+            >
+              <option value="Cash">Cash</option>
+              <option value="Card">Card</option>
+              <option value="UPI">UPI</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </SelectInput>
+
+            <div style={{ marginTop: 14 }}>
+              <Label>Payment Reference ID</Label>
+              <Input
+                value={paymentForm.paymentRef}
+                onChange={(e) =>
+                  setPaymentForm((prev) => ({ ...prev, paymentRef: e.target.value }))
+                }
+                placeholder="Payment reference"
+              />
+            </div>
+
+            <ModalActions>
+              <CancelBtn
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setSelectedInvoice(null);
+                }}
+                disabled={submitting}
+              >
+                Cancel
+              </CancelBtn>
+              <SubmitBtn
+                onClick={handleMarkPaid}
+                disabled={submitting || !paymentForm.paymentRef.trim()}
+              >
+                {submitting ? 'Updating…' : 'Confirm Payment'}
+              </SubmitBtn>
+            </ModalActions>
+          </ModalBox>
+        </ModalOverlay>
+      )}
+
+      {previewInvoice && previewHtml && (
+        <ModalOverlay
+          onClick={(e) => e.target === e.currentTarget && setPreviewInvoice(null)}
+        >
+          <ModalBox style={{ maxWidth: 980 }}>
+            <ModalTitle>Invoice Preview</ModalTitle>
+            <ModalSubtitle>
+              Preview the invoice before saving it as PDF.
+            </ModalSubtitle>
+            <PreviewFrame
+              id="billing-invoice-preview-frame"
+              title={`Invoice ${previewInvoice.id}`}
+              srcDoc={previewHtml}
+            />
+            <ModalActions>
+              <CancelBtn
+                onClick={() => {
+                  setPreviewInvoice(null);
+                  setPreviewHtml('');
+                }}
+              >
+                Close
+              </CancelBtn>
+              <SubmitBtn onClick={handlePrintPreview}>
+                Save as PDF
               </SubmitBtn>
             </ModalActions>
           </ModalBox>

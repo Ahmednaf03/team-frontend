@@ -18,6 +18,8 @@ import Prescriptions from '../pages/Prescriptions/Prescriptions';
 const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage'));
 const PatientList = lazy(() => import('../pages/Patients/PatientList'));
 const PatientProfile = lazy(() => import('../pages/Patients/PatientProfile'));
+const PatientAppointments = lazy(() => import('../pages/Patients/PatientAppointments'));
+const PatientPortalLayout = lazy(() => import('../components/patient/PatientPortalLayout'));
 const AppointmentList = lazy(() => import('../pages/Appointments/AppointmentList'));
 const AppointmentCalendar = lazy(() => import('../pages/Appointments/AppointmentCalendar'));
 const InvoicePage = lazy(() => import('../pages/Billing/InvoicePage'));
@@ -89,7 +91,11 @@ export default function AppRouter({ tenantConfig }) {
             }
           />
 
-          <Route path="/patient-profile" element={<PatientProfile />} />
+          {/* ── Patient Portal pages — nested under patient layout ──────── */}
+          <Route element={<PatientPortalLayout />}>
+            <Route path="/patient-profile" element={<PatientProfile />} />
+            <Route path="/patient-appointments" element={<PatientAppointments />} />
+          </Route>
   
 
           <Route path="/forgot-password" element={<ForgotPassword />} />

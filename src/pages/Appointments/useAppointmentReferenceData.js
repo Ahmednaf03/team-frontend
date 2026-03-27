@@ -18,6 +18,7 @@ const getDisplayName = (record) => {
     record.display_name ||
     record.displayName ||
     record.name ||
+    record.username ||
     combinedName ||
     record.email ||
     ''

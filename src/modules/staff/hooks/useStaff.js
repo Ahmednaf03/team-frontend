@@ -2,6 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchStaffRequest,
+  prefetchStaffRequest,
   fetchStaffByIdRequest,
   createStaffRequest,
   updateStaffRequest,
@@ -23,6 +24,7 @@ export default function useStaff() {
   const {
     list: staff,
     pageCache,
+    prefetchingPages,
     currentStaff,
     loading,
     submitting,
@@ -45,16 +47,17 @@ export default function useStaff() {
     [roleFilter, searchQuery, statusFilter]
   );
   const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
+  const prefetchingForQuery = prefetchingPages[cacheKey] ?? {};
 
   useEffect(() => {
     const next = page + 1;
 
-    if (!totalPages || next > totalPages || cachedPages[next]) {
+    if (!totalPages || next > totalPages || cachedPages[next] || prefetchingForQuery[next]) {
       return;
     }
 
-    dispatch(fetchStaffRequest({ page: next, prefetch: true }));
-  }, [cachedPages, dispatch, page, totalPages]);
+    dispatch(prefetchStaffRequest({ page: next, queryKey: cacheKey }));
+  }, [cacheKey, cachedPages, dispatch, page, prefetchingForQuery, totalPages]);
 
   const fetchStaff = useCallback((options = {}) => {
     dispatch(fetchStaffRequest(options));
@@ -109,18 +112,18 @@ export default function useStaff() {
       return;
     }
 
-    dispatch(nextPage());
+    dispatch(nextPage({ queryKey: cacheKey }));
     dispatch(fetchStaffRequest({ page: page + 1 }));
-  }, [dispatch, hasNext, page]);
+  }, [cacheKey, dispatch, hasNext, page]);
 
   const goPrev = useCallback(() => {
     if (!hasPrev) {
       return;
     }
 
-    dispatch(prevPage());
+    dispatch(prevPage({ queryKey: cacheKey }));
     dispatch(fetchStaffRequest({ page: page - 1 }));
-  }, [dispatch, hasPrev, page]);
+  }, [cacheKey, dispatch, hasPrev, page]);
 
   const selectStaff = useCallback(
     (member) => dispatch(setCurrentStaff(member)),

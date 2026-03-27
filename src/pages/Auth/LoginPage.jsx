@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../../modules/auth/hooks/useAuth';
 import styled, { keyframes, useTheme } from 'styled-components';
+import toast from 'react-hot-toast';
 import { 
   User, Lock, Eye, EyeOff, Activity, 
   ShieldCheck, HeartPulse, Calendar, ServerCrash,
@@ -340,6 +341,11 @@ export default function LoginPage({ tenantConfig }) {
   useEffect(() => { if (isLoggedIn) navigate('/dashboard', { replace: true }); }, [isLoggedIn, navigate]);
   useEffect(() => { usernameRef.current?.focus(); }, []);
   useEffect(() => { if (error) dismissError(); }, [username, password]);
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

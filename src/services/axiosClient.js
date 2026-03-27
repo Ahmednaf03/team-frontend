@@ -93,6 +93,15 @@ axiosClient.interceptors.response.use(
     }
 
     const originalRequest = error.config;
+    const requestUrl = String(originalRequest?.url || '');
+    const publicAuthRoutes = ['/login', '/patient-login', '/resolve', '/refresh'];
+    const isPublicAuthRequest = publicAuthRoutes.some((route) =>
+      requestUrl.includes(route)
+    );
+
+    if (isPublicAuthRequest) {
+      return Promise.reject(error);
+    }
     
     // If it's a 401 and we haven't already retried this exact request
     if (error.response && error.response.status === 401 && !originalRequest._retry) {

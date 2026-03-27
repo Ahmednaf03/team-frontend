@@ -25,13 +25,14 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(!!tenantSlug); 
   const [error, setError] = useState(null);
  
-
+  
   useEffect(() => {
     const fetchTenantDetails = async () => {
       try {
         const response = await axiosClient.get('/resolve');
-        console.log("tenant config ",response.data );
-        setTenantConfig(response.data);
+        console.log("tenant config ",response.data.data );
+        setTenantConfig(response.data.data);
+        
         
       } catch (err) {
         setError('Workspace not found or inactive.');

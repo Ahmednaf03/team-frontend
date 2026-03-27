@@ -10,6 +10,8 @@ import usePrescriptions from '../../modules/prescriptions/hooks/usePrescriptions
 import useAuth from '../../modules/auth/hooks/useAuth';
 import useAppointmentReferenceData from '../Appointments/useAppointmentReferenceData';
 import { fetchAppointmentsAPI } from '../../modules/appointments/appointmentAPI';
+import { fetchPrescriptionByIdAPI } from '../../modules/prescriptions/prescriptionAPI';
+import { fetchAllPatientsAPI } from '../../modules/patients/patientAPI';
 import { extractCollection, enrichAppointment } from '../../utils/appointmentMapping';
 import {
   Pill,
@@ -28,6 +30,27 @@ const InlineIcon = styled.span`
   align-items: center;
   justify-content: center;
 `;
+
+const getEntityDisplayName = (entity) => {
+  if (!entity) return '';
+  if (typeof entity === 'string') return entity;
+
+  const firstName = entity.first_name || entity.firstName || '';
+  const lastName = entity.last_name || entity.lastName || '';
+  const combinedName = `${firstName} ${lastName}`.trim();
+
+  return (
+    entity.full_name ||
+    entity.fullName ||
+    entity.display_name ||
+    entity.displayName ||
+    entity.name ||
+    entity.username ||
+    combinedName ||
+    entity.email ||
+    ''
+  );
+};
 
 // ── Animations ────────────────────────────────────────────────────────────────
 const fadeUp = keyframes`
@@ -623,6 +646,7 @@ const Prescriptions = () => {
   const { user } = useAuth();
   const role = user?.role?.toLowerCase();
   const { patientLookup, doctorLookup } = useAppointmentReferenceData();
+  const [patientNameMap, setPatientNameMap] = useState({});
 
   const canCreate  = ['provider'].includes(role);
 const canVerify   = ['pharmacist'].includes(role);
@@ -630,12 +654,80 @@ const canDispense = ['pharmacist'].includes(role);
 
   const {
     prescriptions, currentPrescription, loading, detailLoading, submitting,
-    error, searchQuery, statusFilter, page, pageSize, totalPages, total, hasNext, hasPrev,
+    error, success, searchQuery, statusFilter, page, pageSize, totalPages, total, hasNext, hasPrev,
     fetchPrescriptions, openPrescription, closePrescription,
     createPrescription, addItem, verify, dispense,
     searchPrescriptions, filterByStatus,
-    goNext, goPrev, dismissError,
+    goNext, goPrev, dismissError, dismissSuccess,
   } = usePrescriptions();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPatientNames = async () => {
+      try {
+        const envelope = await fetchAllPatientsAPI({ per_page: 500 });
+        const patientRecords = extractCollection(envelope);
+
+        if (!isMounted) return;
+
+        const nextMap = patientRecords.reduce((acc, patient) => {
+          const patientId = Number(patient?.id);
+          const patientName = getEntityDisplayName(patient);
+
+          if (Number.isFinite(patientId) && patientName) {
+            acc[patientId] = patientName;
+          }
+
+          return acc;
+        }, {});
+
+        setPatientNameMap(nextMap);
+      } catch (error) {
+        if (isMounted) {
+          setPatientNameMap({});
+        }
+      }
+    };
+
+    loadPatientNames();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!success?.type) {
+      return;
+    }
+
+    if (success.type === 'createPrescription') {
+      const rxId = success?.data?.prescription_id;
+
+      toast.success('Prescription created! Now add medicines.');
+      setNewPrescriptionId(rxId ?? null);
+      setItemForm(EMPTY_ITEM);
+      setItemErrors({});
+      setModal('addItem');
+    }
+
+    if (success.type === 'addItem') {
+      toast.success('Medicine added successfully.');
+      setItemForm(EMPTY_ITEM);
+      setItemErrors({});
+    }
+
+    if (success.type === 'verify') {
+      toast.success('Prescription verified successfully.');
+    }
+
+    if (success.type === 'dispense') {
+      toast.success('Prescription dispensed. Stock updated!');
+    }
+
+    dismissSuccess();
+  }, [dismissSuccess, success]);
 
   // ── modal states ──────────────────────────────────────────────────────────
   // 'create' → step 1: create prescription header
@@ -655,25 +747,76 @@ const canDispense = ['pharmacist'].includes(role);
   const debounceRef = useRef(null);
 
   const resolvePatientName = useCallback(
-    (patientId) => patientLookup?.[Number(patientId)] || `Patient #${patientId}`,
-    [patientLookup]
+    (source) => {
+      const patientId =
+        typeof source === 'object' && source !== null ? source.patient_id : source;
+
+      const directName =
+        typeof source === 'object' && source !== null
+          ? source.patient_name ||
+            source.patientName ||
+            getEntityDisplayName(source.patient)
+          : '';
+
+      return (
+        directName ||
+        patientNameMap?.[Number(patientId)] ||
+        patientLookup?.[Number(patientId)] ||
+        `Patient #${patientId}`
+      );
+    },
+    [patientLookup, patientNameMap]
   );
 
   const resolveDoctorName = useCallback(
-    (doctorId) => doctorLookup?.[Number(doctorId)] || `Doctor #${doctorId}`,
+    (source) => {
+      const doctorId =
+        typeof source === 'object' && source !== null ? source.doctor_id : source;
+
+      const directName =
+        typeof source === 'object' && source !== null
+          ? source.doctor_name ||
+            source.doctorName ||
+            getEntityDisplayName(source.doctor)
+          : '';
+
+      return (
+        directName ||
+        doctorLookup?.[Number(doctorId)] ||
+        `Doctor #${doctorId}`
+      );
+    },
     [doctorLookup]
   );
 
-  useEffect(() => { fetchPrescriptions(); }, [fetchPrescriptions]);
+  useEffect(() => {
+    if (!role) {
+      return;
+    }
+
+    if (role === 'provider' && !user?.id) {
+      return;
+    }
+
+    fetchPrescriptions({ page: 1, force: true });
+  }, [fetchPrescriptions, role, user?.id]);
 
   const loadAppointmentOptions = useCallback(async () => {
     if (!canCreate) return;
     setAppointmentsLoading(true);
     try {
-      const response = await fetchAppointmentsAPI();
-      const items = extractCollection(response).map((appointment) =>
-        enrichAppointment(appointment)
+      const response = await fetchAppointmentsAPI(
+        role === 'provider' && user?.id
+          ? { doctor_id: user.id, per_page: 500 }
+          : { per_page: 500 }
       );
+      const items = extractCollection(response)
+        .map((appointment) => enrichAppointment(appointment))
+        .filter((appointment) =>
+          role === 'provider'
+            ? Number(appointment?.doctor_id) === Number(user?.id)
+            : true
+        );
       setAppointmentOptions(items);
     } catch (fetchError) {
       toast.error(
@@ -684,7 +827,7 @@ const canDispense = ['pharmacist'].includes(role);
     } finally {
       setAppointmentsLoading(false);
     }
-  }, [canCreate]);
+  }, [canCreate, role, user?.id]);
 
   useEffect(() => {
     loadAppointmentOptions();
@@ -766,23 +909,7 @@ const canDispense = ['pharmacist'].includes(role);
       notes:          createForm.notes.trim(),
     };
 
-    createPrescription(data, (responseData) => {
-      // console.log('Response data:', responseData);
-      const rxId = responseData?.prescription_id;
-      // console.log('Prescription ID:', rxId); 
-      //     if (!rxId) {
-      // toast.error('Prescription created but ID missing. Please add medicines manually.');
-    //   setModal(null);
-    //   fetchPrescriptions();
-    //   return;
-    // }
-      toast.success('Prescription created! Now add medicines. 💊');
-      setNewPrescriptionId(rxId);
-      setItemForm(EMPTY_ITEM);
-      setItemErrors({});
-      setModal('addItem');
-      fetchPrescriptions(); // refresh list
-    });
+    createPrescription(data);
   };
 
   // ── Add item submit ────────────────────────────────────────────────────
@@ -800,34 +927,34 @@ const canDispense = ['pharmacist'].includes(role);
       instructions:    itemForm.instructions?.trim() || '',
     };
 
-    addItem(data, newPrescriptionId, () => {
-      toast.success('Medicine added successfully.');
-      setItemForm(EMPTY_ITEM);
-      setItemErrors({});
-    });
+    addItem(data, newPrescriptionId);
   };
 
   // ── Verify ────────────────────────────────────────────────────────────
-  const handleVerify = (id, e) => {
+  const handleVerify = async (id, e) => {
     e?.stopPropagation();
 
-    const targetPrescription =
-      currentPrescription?.id === id
-        ? currentPrescription
-        : prescriptions.find((prescription) => prescription.id === id);
+    try {
+      const detailEnvelope = await fetchPrescriptionByIdAPI(id);
+      const targetPrescription = detailEnvelope?.data;
 
-    if (!targetPrescription?.items?.length) {
-      toast.error('No medications found.');
-      return;
+      if (!targetPrescription?.items?.length) {
+        toast.error('No medications found.');
+        return;
+      }
+
+      verify(id);
+    } catch (verifyCheckError) {
+      toast.error(
+        verifyCheckError?.response?.data?.message || 'Unable to validate prescription items.'
+      );
     }
-
-    verify(id, () => { toast.success('Prescription verified successfully.'); });
   };
 
   // ── Dispense ──────────────────────────────────────────────────────────
   const handleDispense = (id, e) => {
     e?.stopPropagation();
-    dispense(id, () => { toast.success('Prescription dispensed 💊 Stock updated!'); });
+    dispense(id);
   };
 
   const pStart = total > 0 ? (page - 1) * pageSize + 1 : 0;
@@ -927,12 +1054,12 @@ const canDispense = ['pharmacist'].includes(role);
                   </Td>
                   <Td>
                     <span style={{ fontWeight: 500 }}>
-                      {resolvePatientName(rx.patient_id)}
+                      {resolvePatientName(rx)}
                     </span>
                   </Td>
                   <Td>
                     <span style={{ fontWeight: 500 }}>
-                      {resolveDoctorName(rx.doctor_id)}
+                      {resolveDoctorName(rx)}
                     </span>
                   </Td>
                   <Td style={{ fontSize: 13, color: theme.colors.textSecondary }}>
@@ -1370,12 +1497,12 @@ const canDispense = ['pharmacist'].includes(role);
                   <InfoValue><StatusTag status={currentPrescription.status} /></InfoValue>
                 </InfoField>
                 <InfoField>
-                  <InfoLabel>Patient ID</InfoLabel>
-                  <InfoValue>P-{currentPrescription.patient_id}</InfoValue>
+                  <InfoLabel>Patient</InfoLabel>
+                  <InfoValue>{resolvePatientName(currentPrescription)}</InfoValue>
                 </InfoField>
                 <InfoField>
-                  <InfoLabel>Doctor ID</InfoLabel>
-                  <InfoValue>D-{currentPrescription.doctor_id}</InfoValue>
+                  <InfoLabel>Doctor</InfoLabel>
+                  <InfoValue>{resolveDoctorName(currentPrescription)}</InfoValue>
                 </InfoField>
                 <InfoField>
                   <InfoLabel>Appointment ID</InfoLabel>

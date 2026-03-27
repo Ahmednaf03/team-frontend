@@ -1,5 +1,4 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { buildPaginationCacheKey } from '../../utils/paginationCache';
 
 const PAGE_SIZE = 5;
 
@@ -11,8 +10,10 @@ const initialState = {
   detailLoading: false,
   submitting: false,
   error: null,
+  success: null,
   pageCache: {},
   paginationMetaByQuery: {},
+  prefetchingPages: {},
   searchQuery: '',
   statusFilter: 'ALL',
   pagination: {
@@ -57,16 +58,12 @@ const prescriptionSlice = createSlice({
   name: 'prescriptions',
   initialState,
   reducers: {
-    fetchPrescriptionsRequest: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
-      }
-
+    fetchPrescriptionsRequest: (state) => {
       state.loading = true;
       state.error = null;
     },
     fetchPrescriptionsSuccess: (state, action) => {
-      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+      const { data, pagination, page, queryKey } = action.payload;
 
       if (!state.pageCache[queryKey]) {
         state.pageCache[queryKey] = {};
@@ -79,10 +76,6 @@ const prescriptionSlice = createSlice({
         totalPages: pagination?.totalPages ?? state.pagination.totalPages,
       };
 
-      if (prefetch) {
-        return;
-      }
-
       state.loading = false;
       state.list = data;
       state.filtered = data;
@@ -93,12 +86,45 @@ const prescriptionSlice = createSlice({
       );
     },
     fetchPrescriptionsFailure: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
+      state.loading = false;
+      state.error = action.payload;
+    },
+    prefetchPrescriptionsRequest: (state, action) => {
+      const { page, queryKey } = action.payload;
+      if (!state.prefetchingPages[queryKey]) {
+        state.prefetchingPages[queryKey] = {};
+      }
+      state.prefetchingPages[queryKey][page] = true;
+    },
+    prefetchPrescriptionsSuccess: (state, action) => {
+      const { data, pagination, page, queryKey } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
       }
 
-      state.loading = false;
-      state.error = action.payload?.message ?? action.payload;
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        perPage: pagination?.perPage ?? state.pagination.pageSize,
+        totalRecords: pagination?.totalRecords ?? state.pagination.total,
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+      };
+
+      if (state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
+    },
+    prefetchPrescriptionsFailure: (state, action) => {
+      const { page, queryKey } = action.payload || {};
+      if (queryKey && state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
     },
     hydratePrescriptionsFromCache: (state, action) => {
       const { page, queryKey } = action.payload;
@@ -123,9 +149,11 @@ const prescriptionSlice = createSlice({
     createPrescriptionRequest: (state) => {
       state.submitting = true;
       state.error = null;
+      state.success = null;
     },
-    createPrescriptionSuccess: (state) => {
+    createPrescriptionSuccess: (state, action) => {
       state.submitting = false;
+      state.success = action.payload || null;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
     },
@@ -137,9 +165,11 @@ const prescriptionSlice = createSlice({
     addItemRequest: (state) => {
       state.submitting = true;
       state.error = null;
+      state.success = null;
     },
-    addItemSuccess: (state) => {
+    addItemSuccess: (state, action) => {
       state.submitting = false;
+      state.success = action.payload || null;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
     },
@@ -151,9 +181,11 @@ const prescriptionSlice = createSlice({
     verifyRequest: (state) => {
       state.submitting = true;
       state.error = null;
+      state.success = null;
     },
-    verifySuccess: (state) => {
+    verifySuccess: (state, action) => {
       state.submitting = false;
+      state.success = action.payload || null;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
     },
@@ -165,9 +197,11 @@ const prescriptionSlice = createSlice({
     dispenseRequest: (state) => {
       state.submitting = true;
       state.error = null;
+      state.success = null;
     },
-    dispenseSuccess: (state) => {
+    dispenseSuccess: (state, action) => {
       state.submitting = false;
+      state.success = action.payload || null;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
     },
@@ -185,30 +219,30 @@ const prescriptionSlice = createSlice({
       state.pagination.page = 1;
     },
 
-    nextPage: (state) => {
+    nextPage: (state, action) => {
       const next = state.pagination.page + 1;
       if (next > state.pagination.totalPages) {
         return;
       }
 
       state.pagination.page = next;
-      const queryKey = buildPaginationCacheKey({
-        search: state.searchQuery,
-        status: state.statusFilter,
-      });
+      const queryKey = action.payload?.queryKey;
+      if (!queryKey) {
+        return;
+      }
       syncCachedPage(state, next, queryKey);
     },
-    prevPage: (state) => {
+    prevPage: (state, action) => {
       const prev = state.pagination.page - 1;
       if (prev < 1) {
         return;
       }
 
       state.pagination.page = prev;
-      const queryKey = buildPaginationCacheKey({
-        search: state.searchQuery,
-        status: state.statusFilter,
-      });
+      const queryKey = action.payload?.queryKey;
+      if (!queryKey) {
+        return;
+      }
       syncCachedPage(state, prev, queryKey);
     },
 
@@ -221,6 +255,9 @@ const prescriptionSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    clearSuccess: (state) => {
+      state.success = null;
+    },
   },
 });
 
@@ -228,6 +265,9 @@ export const {
   fetchPrescriptionsRequest,
   fetchPrescriptionsSuccess,
   fetchPrescriptionsFailure,
+  prefetchPrescriptionsRequest,
+  prefetchPrescriptionsSuccess,
+  prefetchPrescriptionsFailure,
   hydratePrescriptionsFromCache,
   fetchPrescriptionByIdRequest,
   fetchPrescriptionByIdSuccess,
@@ -251,6 +291,7 @@ export const {
   setCurrentPrescription,
   clearCurrentPrescription,
   clearError,
+  clearSuccess,
 } = prescriptionSlice.actions;
 
 export default prescriptionSlice.reducer;

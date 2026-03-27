@@ -1,5 +1,4 @@
 import { createSlice } from '@reduxjs/toolkit';
-import { buildPaginationCacheKey } from '../../utils/paginationCache';
 
 const PAGE_SIZE = 5;
 
@@ -12,6 +11,7 @@ const initialState = {
   error: null,
   pageCache: {},
   paginationMetaByQuery: {},
+  prefetchingPages: {},
   pagination: {
     page: 1,
     pageSize: PAGE_SIZE,
@@ -57,16 +57,12 @@ const staffSlice = createSlice({
   name: 'staff',
   initialState,
   reducers: {
-    fetchStaffRequest: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
-      }
-
+    fetchStaffRequest: (state) => {
       state.loading = true;
       state.error = null;
     },
     fetchStaffSuccess: (state, action) => {
-      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+      const { data, pagination, page, queryKey } = action.payload;
 
       if (!state.pageCache[queryKey]) {
         state.pageCache[queryKey] = {};
@@ -79,10 +75,6 @@ const staffSlice = createSlice({
         totalPages: pagination?.totalPages ?? state.pagination.totalPages,
       };
 
-      if (prefetch) {
-        return;
-      }
-
       state.loading = false;
       state.list = data;
       state.filtered = data;
@@ -93,12 +85,45 @@ const staffSlice = createSlice({
       );
     },
     fetchStaffFailure: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
+      state.loading = false;
+      state.error = action.payload;
+    },
+    prefetchStaffRequest: (state, action) => {
+      const { page, queryKey } = action.payload;
+      if (!state.prefetchingPages[queryKey]) {
+        state.prefetchingPages[queryKey] = {};
+      }
+      state.prefetchingPages[queryKey][page] = true;
+    },
+    prefetchStaffSuccess: (state, action) => {
+      const { data, pagination, page, queryKey } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
       }
 
-      state.loading = false;
-      state.error = action.payload?.message ?? action.payload;
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        perPage: pagination?.perPage ?? state.pagination.pageSize,
+        totalRecords: pagination?.totalRecords ?? state.pagination.total,
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+      };
+
+      if (state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
+    },
+    prefetchStaffFailure: (state, action) => {
+      const { page, queryKey } = action.payload || {};
+      if (queryKey && state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
     },
     hydrateStaffFromCache: (state, action) => {
       const { page, queryKey } = action.payload;
@@ -175,32 +200,30 @@ const staffSlice = createSlice({
       state.pagination.page = 1;
     },
 
-    nextPage: (state) => {
+    nextPage: (state, action) => {
       const next = state.pagination.page + 1;
       if (next > state.pagination.totalPages) {
         return;
       }
 
       state.pagination.page = next;
-      const queryKey = buildPaginationCacheKey({
-        search: state.searchQuery,
-        role: state.roleFilter,
-        status: state.statusFilter,
-      });
+      const queryKey = action.payload?.queryKey;
+      if (!queryKey) {
+        return;
+      }
       syncCachedPage(state, next, queryKey);
     },
-    prevPage: (state) => {
+    prevPage: (state, action) => {
       const prev = state.pagination.page - 1;
       if (prev < 1) {
         return;
       }
 
       state.pagination.page = prev;
-      const queryKey = buildPaginationCacheKey({
-        search: state.searchQuery,
-        role: state.roleFilter,
-        status: state.statusFilter,
-      });
+      const queryKey = action.payload?.queryKey;
+      if (!queryKey) {
+        return;
+      }
       syncCachedPage(state, prev, queryKey);
     },
 
@@ -220,6 +243,9 @@ export const {
   fetchStaffRequest,
   fetchStaffSuccess,
   fetchStaffFailure,
+  prefetchStaffRequest,
+  prefetchStaffSuccess,
+  prefetchStaffFailure,
   hydrateStaffFromCache,
   fetchStaffByIdRequest,
   fetchStaffByIdSuccess,

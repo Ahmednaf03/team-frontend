@@ -16,8 +16,10 @@ const initialState = {
   summaryLoading: false,
   submitting: false,
   error: null,
+  success: null,
   pageCache: {},
   paginationMetaByQuery: {},
+  prefetchingPages: {},
   pagination: {
     page: 1,
     pageSize: PAGE_SIZE,
@@ -62,16 +64,12 @@ const billingSlice = createSlice({
   name: 'billing',
   initialState,
   reducers: {
-    fetchInvoicesRequest: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
-      }
-
+    fetchInvoicesRequest: (state) => {
       state.loading = true;
       state.error = null;
     },
     fetchInvoicesSuccess: (state, action) => {
-      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+      const { data, pagination, page, queryKey } = action.payload;
 
       if (!state.pageCache[queryKey]) {
         state.pageCache[queryKey] = {};
@@ -84,10 +82,6 @@ const billingSlice = createSlice({
         totalPages: pagination?.totalPages ?? state.pagination.totalPages,
       };
 
-      if (prefetch) {
-        return;
-      }
-
       state.loading = false;
       state.invoices = data;
       state.filtered = data;
@@ -98,12 +92,45 @@ const billingSlice = createSlice({
       );
     },
     fetchInvoicesFailure: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
+      state.loading = false;
+      state.error = action.payload;
+    },
+    prefetchInvoicesRequest: (state, action) => {
+      const { page, queryKey } = action.payload;
+      if (!state.prefetchingPages[queryKey]) {
+        state.prefetchingPages[queryKey] = {};
+      }
+      state.prefetchingPages[queryKey][page] = true;
+    },
+    prefetchInvoicesSuccess: (state, action) => {
+      const { data, pagination, page, queryKey } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
       }
 
-      state.loading = false;
-      state.error = action.payload?.message ?? action.payload;
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        perPage: pagination?.perPage ?? state.pagination.pageSize,
+        totalRecords: pagination?.totalRecords ?? state.pagination.total,
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+      };
+
+      if (state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
+    },
+    prefetchInvoicesFailure: (state, action) => {
+      const { page, queryKey } = action.payload || {};
+      if (queryKey && state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
     },
     hydrateInvoicesFromCache: (state, action) => {
       const { page, queryKey } = action.payload;
@@ -128,9 +155,11 @@ const billingSlice = createSlice({
     generateInvoiceRequest: (state) => {
       state.submitting = true;
       state.error = null;
+      state.success = null;
     },
-    generateInvoiceSuccess: (state) => {
+    generateInvoiceSuccess: (state, action) => {
       state.submitting = false;
+      state.success = action.payload || null;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
     },
@@ -142,9 +171,11 @@ const billingSlice = createSlice({
     markPaidRequest: (state) => {
       state.submitting = true;
       state.error = null;
+      state.success = null;
     },
-    markPaidSuccess: (state) => {
+    markPaidSuccess: (state, action) => {
       state.submitting = false;
+      state.success = action.payload || null;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
     },
@@ -197,6 +228,9 @@ const billingSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    clearSuccess: (state) => {
+      state.success = null;
+    },
   },
 });
 
@@ -204,6 +238,9 @@ export const {
   fetchInvoicesRequest,
   fetchInvoicesSuccess,
   fetchInvoicesFailure,
+  prefetchInvoicesRequest,
+  prefetchInvoicesSuccess,
+  prefetchInvoicesFailure,
   hydrateInvoicesFromCache,
   fetchSummaryRequest,
   fetchSummarySuccess,
@@ -221,6 +258,7 @@ export const {
   setCurrentInvoice,
   clearCurrentInvoice,
   clearError,
+  clearSuccess,
 } = billingSlice.actions;
 
 export default billingSlice.reducer;

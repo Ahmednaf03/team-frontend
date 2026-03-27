@@ -22,6 +22,7 @@ const initialState = {
   selected: null,
   pageCache: {},
   paginationMetaByQuery: {},
+  prefetchingPages: {},
   pagination: {
     currentPage: 1,
     totalPages: 1,
@@ -59,6 +60,25 @@ const buildPaginationState = (meta, currentPage, fallbackPerPage) => {
   };
 };
 
+const mergeAppointmentPatch = (appointment, patch = {}) => {
+  if (!appointment || appointment.id !== patch.id) {
+    return appointment;
+  }
+
+  return {
+    ...appointment,
+    ...Object.fromEntries(
+      Object.entries({
+        patient_id: patch.patient_id,
+        doctor_id: patch.doctor_id,
+        scheduled_at: patch.scheduled_at,
+        notes: patch.notes,
+        status: patch.status,
+      }).filter(([, value]) => value !== undefined)
+    ),
+  };
+};
+
 const syncCachedPage = (state, page, queryKey) => {
   const cachedPage = state.pageCache[queryKey]?.[page];
   const meta = state.paginationMetaByQuery[queryKey];
@@ -80,16 +100,12 @@ const appointmentSlice = createSlice({
   initialState,
   reducers: {
     // ── Fetch list ──────────────────────────────────────────────────────────
-    fetchAppointmentsRequest: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
-      }
-
+    fetchAppointmentsRequest: (state) => {
       state.loading = true;
       state.error = null;
     },
     fetchAppointmentsSuccess: (state, action) => {
-      const { data, pagination, page, queryKey, prefetch = false } = action.payload;
+      const { data, pagination, page, queryKey } = action.payload;
 
       if (!state.pageCache[queryKey]) {
         state.pageCache[queryKey] = {};
@@ -102,10 +118,6 @@ const appointmentSlice = createSlice({
         perPage: pagination?.perPage ?? state.pagination.perPage,
       };
 
-      if (prefetch) {
-        return;
-      }
-
       state.list = data;
       state.pagination = buildPaginationState(
         pagination,
@@ -115,12 +127,45 @@ const appointmentSlice = createSlice({
       state.loading = false;
     },
     fetchAppointmentsFailure: (state, action) => {
-      if (action.payload?.prefetch) {
-        return;
+      state.loading = false;
+      state.error = action.payload;
+    },
+    prefetchAppointmentsRequest: (state, action) => {
+      const { page, queryKey } = action.payload;
+      if (!state.prefetchingPages[queryKey]) {
+        state.prefetchingPages[queryKey] = {};
+      }
+      state.prefetchingPages[queryKey][page] = true;
+    },
+    prefetchAppointmentsSuccess: (state, action) => {
+      const { data, pagination, page, queryKey } = action.payload;
+
+      if (!state.pageCache[queryKey]) {
+        state.pageCache[queryKey] = {};
       }
 
-      state.loading = false;
-      state.error = action.payload?.message ?? action.payload;
+      state.pageCache[queryKey][page] = data;
+      state.paginationMetaByQuery[queryKey] = {
+        totalPages: pagination?.totalPages ?? state.pagination.totalPages,
+        totalRecords: pagination?.totalRecords ?? state.pagination.totalRecords,
+        perPage: pagination?.perPage ?? state.pagination.perPage,
+      };
+
+      if (state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
+    },
+    prefetchAppointmentsFailure: (state, action) => {
+      const { page, queryKey } = action.payload || {};
+      if (queryKey && state.prefetchingPages[queryKey]) {
+        delete state.prefetchingPages[queryKey][page];
+        if (Object.keys(state.prefetchingPages[queryKey]).length === 0) {
+          delete state.prefetchingPages[queryKey];
+        }
+      }
     },
     hydrateAppointmentsFromCache: (state, action) => {
       const { page, queryKey } = action.payload;
@@ -187,9 +232,25 @@ const appointmentSlice = createSlice({
       state.actionLoading = false;
       state.pageCache = {};
       state.paginationMetaByQuery = {};
-      state.success = typeof action.payload === 'string' 
-        ? action.payload 
-        : 'Appointment updated successfully.';
+      const patch = action.payload?.updatedAppointment;
+
+      if (patch?.id !== undefined) {
+        state.list = state.list.map((appointment) =>
+          mergeAppointmentPatch(appointment, patch)
+        );
+        state.upcoming = state.upcoming.map((appointment) =>
+          mergeAppointmentPatch(appointment, patch)
+        );
+
+        if (state.selected?.id === patch.id) {
+          state.selected = mergeAppointmentPatch(state.selected, patch);
+        }
+      }
+
+      state.success =
+        typeof action.payload === 'string'
+          ? action.payload
+          : action.payload?.message || 'Appointment updated successfully.';
     },
     updateAppointmentFailure: (state, action) => {
       state.actionLoading = false;
@@ -282,6 +343,9 @@ export const {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
   fetchAppointmentsFailure,
+  prefetchAppointmentsRequest,
+  prefetchAppointmentsSuccess,
+  prefetchAppointmentsFailure,
   hydrateAppointmentsFromCache,
   fetchUpcomingRequest,
   fetchUpcomingSuccess,

@@ -12,6 +12,9 @@ import {
   fetchPrescriptionsRequest,
   fetchPrescriptionsSuccess,
   fetchPrescriptionsFailure,
+  prefetchPrescriptionsRequest,
+  prefetchPrescriptionsSuccess,
+  prefetchPrescriptionsFailure,
   hydratePrescriptionsFromCache,
   fetchPrescriptionByIdRequest,
   fetchPrescriptionByIdSuccess,
@@ -68,45 +71,65 @@ const buildFallbackPage = (items, page, pageSize) => {
   };
 };
 
+const buildPrescriptionQueryKey = (searchQuery, statusFilter, currentUser) => {
+  const currentRole = String(currentUser?.role || '').toLowerCase();
+
+  return buildPaginationCacheKey({
+    search: searchQuery,
+    status: statusFilter,
+    scopeRole: currentRole,
+    scopeUserId: currentRole === 'provider' ? String(currentUser?.id || '') : '',
+  });
+};
+
 function* handleFetchPrescriptions(action) {
   try {
     const { pagination, searchQuery, statusFilter } = yield select(
       (state) => state.prescriptions
     );
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
     const requestedPage = action.payload?.page ?? pagination.page;
-    const prefetch = Boolean(action.payload?.prefetch);
     const force = Boolean(action.payload?.force);
-    const queryKey = buildPaginationCacheKey({
-      search: searchQuery,
-      status: statusFilter,
-    });
+    const queryKey = buildPrescriptionQueryKey(searchQuery, statusFilter, currentUser);
     const cachedPage = yield select(
       (state) => state.prescriptions.pageCache[queryKey]?.[requestedPage]
     );
 
     if (cachedPage && !force) {
-      if (!prefetch) {
-        yield put(hydratePrescriptionsFromCache({ page: requestedPage, queryKey }));
-      }
+      yield put(hydratePrescriptionsFromCache({ page: requestedPage, queryKey }));
       return;
     }
 
     const params = {
-      page: requestedPage,
-      per_page: pagination.pageSize,
+      page: isProvider ? 1 : requestedPage,
+      per_page: isProvider ? 500 : pagination.pageSize,
       ...(searchQuery && { search: searchQuery }),
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
+      ...(isProvider && currentUser?.id && { doctor_id: currentUser.id }),
     };
 
     const envelope = yield call(fetchAllPrescriptionsAPI, params);
     const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
-    const paginatedPayload = envelope?.pagination
+    const scopedData = isProvider
+      ? responseData.filter(
+          (prescription) => Number(prescription?.doctor_id) === Number(currentUser?.id)
+        )
+      : responseData;
+    const paginatedPayload = isProvider
+      ? buildFallbackPage(
+          applyFilters(scopedData, searchQuery, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
       ? {
-          data: responseData,
+          data: scopedData,
           pagination: envelope.pagination,
         }
       : buildFallbackPage(
-          applyFilters(responseData, searchQuery, statusFilter),
+          applyFilters(scopedData, searchQuery, statusFilter),
           requestedPage,
           pagination.pageSize
         );
@@ -117,12 +140,87 @@ function* handleFetchPrescriptions(action) {
         pagination: paginatedPayload.pagination,
         page: requestedPage,
         queryKey,
-        prefetch,
       })
     );
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to fetch prescriptions.';
-    yield put(fetchPrescriptionsFailure({ message, prefetch: action.payload?.prefetch }));
+    yield put(fetchPrescriptionsFailure(message));
+  }
+}
+
+function* handlePrefetchPrescriptions(action) {
+  try {
+    const { pagination, searchQuery, statusFilter } = yield select(
+      (state) => state.prescriptions
+    );
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
+    const requestedPage = action.payload?.page;
+    const queryKey =
+      action.payload?.queryKey ??
+      buildPrescriptionQueryKey(searchQuery, statusFilter, currentUser);
+
+    if (!requestedPage) {
+      return;
+    }
+
+    const cachedPage = yield select(
+      (state) => state.prescriptions.pageCache[queryKey]?.[requestedPage]
+    );
+
+    if (cachedPage) {
+      yield put(prefetchPrescriptionsFailure({ page: requestedPage, queryKey }));
+      return;
+    }
+
+    const params = {
+      page: isProvider ? 1 : requestedPage,
+      per_page: isProvider ? 500 : pagination.pageSize,
+      ...(searchQuery && { search: searchQuery }),
+      ...(statusFilter !== 'ALL' && { status: statusFilter }),
+      ...(isProvider && currentUser?.id && { doctor_id: currentUser.id }),
+    };
+
+    const envelope = yield call(fetchAllPrescriptionsAPI, params);
+    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
+    const scopedData = isProvider
+      ? responseData.filter(
+          (prescription) => Number(prescription?.doctor_id) === Number(currentUser?.id)
+        )
+      : responseData;
+    const paginatedPayload = isProvider
+      ? buildFallbackPage(
+          applyFilters(scopedData, searchQuery, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
+      ? {
+          data: scopedData,
+          pagination: envelope.pagination,
+        }
+      : buildFallbackPage(
+          applyFilters(scopedData, searchQuery, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        );
+
+    yield put(
+      prefetchPrescriptionsSuccess({
+        data: paginatedPayload.data,
+        pagination: paginatedPayload.pagination,
+        page: requestedPage,
+        queryKey,
+      })
+    );
+  } catch (error) {
+    yield put(
+      prefetchPrescriptionsFailure({
+        page: action.payload?.page,
+        queryKey: action.payload?.queryKey,
+      })
+    );
   }
 }
 
@@ -139,11 +237,13 @@ function* handleFetchPrescriptionById(action) {
 function* handleCreatePrescription(action) {
   try {
     const envelope = yield call(createPrescriptionAPI, action.payload.data);
-    yield put(createPrescriptionSuccess());
+    yield put(
+      createPrescriptionSuccess({
+        type: 'createPrescription',
+        data: envelope.data,
+      })
+    );
     yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
-    if (action.payload.onSuccess) {
-      action.payload.onSuccess(envelope.data);
-    }
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to create prescription.';
     yield put(createPrescriptionFailure(message));
@@ -152,13 +252,17 @@ function* handleCreatePrescription(action) {
 
 function* handleAddItem(action) {
   try {
+    const { pagination } = yield select((state) => state.prescriptions);
     yield call(addPrescriptionItemAPI, action.payload.data);
-    yield put(addItemSuccess());
+    yield put(
+      addItemSuccess({
+        type: 'addItem',
+      })
+    );
     if (action.payload.prescriptionId) {
       yield put(fetchPrescriptionByIdRequest(action.payload.prescriptionId));
     }
-    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
-    if (action.payload.onSuccess) action.payload.onSuccess();
+    yield put(fetchPrescriptionsRequest({ page: pagination.page, force: true }));
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to add item.';
     yield put(addItemFailure(message));
@@ -167,10 +271,14 @@ function* handleAddItem(action) {
 
 function* handleVerify(action) {
   try {
+    const { pagination } = yield select((state) => state.prescriptions);
     yield call(verifyPrescriptionAPI, action.payload.id);
-    yield put(verifySuccess());
-    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
-    if (action.payload.onSuccess) action.payload.onSuccess();
+    yield put(
+      verifySuccess({
+        type: 'verify',
+      })
+    );
+    yield put(fetchPrescriptionsRequest({ page: pagination.page, force: true }));
   } catch (error) {
     const message = error.response?.data?.message || 'Verification failed.';
     yield put(verifyFailure(message));
@@ -179,10 +287,14 @@ function* handleVerify(action) {
 
 function* handleDispense(action) {
   try {
+    const { pagination } = yield select((state) => state.prescriptions);
     yield call(dispensePrescriptionAPI, action.payload.id);
-    yield put(dispenseSuccess());
-    yield put(fetchPrescriptionsRequest({ page: 1, force: true }));
-    if (action.payload.onSuccess) action.payload.onSuccess();
+    yield put(
+      dispenseSuccess({
+        type: 'dispense',
+      })
+    );
+    yield put(fetchPrescriptionsRequest({ page: pagination.page, force: true }));
   } catch (error) {
     const message = error.response?.data?.message || 'Dispense failed.';
     yield put(dispenseFailure(message));
@@ -191,6 +303,7 @@ function* handleDispense(action) {
 
 export default function* prescriptionSaga() {
   yield takeLatest(fetchPrescriptionsRequest.type, handleFetchPrescriptions);
+  yield takeEvery(prefetchPrescriptionsRequest.type, handlePrefetchPrescriptions);
   yield takeLatest(fetchPrescriptionByIdRequest.type, handleFetchPrescriptionById);
   yield takeEvery(createPrescriptionRequest.type, handleCreatePrescription);
   yield takeEvery(addItemRequest.type, handleAddItem);

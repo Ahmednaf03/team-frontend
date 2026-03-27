@@ -2,6 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchInvoicesRequest,
+  prefetchInvoicesRequest,
   fetchSummaryRequest,
   generateInvoiceRequest,
   markPaidRequest,
@@ -12,6 +13,7 @@ import {
   setCurrentInvoice,
   clearCurrentInvoice,
   clearError,
+  clearSuccess,
 } from '../billingSlice';
 import { buildPaginationCacheKey } from '../../../utils/paginationCache';
 
@@ -21,12 +23,14 @@ export default function useBilling() {
   const {
     invoices,
     pageCache,
+    prefetchingPages,
     summary,
     currentInvoice,
     loading,
     summaryLoading,
     submitting,
     error,
+    success,
     statusFilter,
     searchQuery,
     pagination,
@@ -43,16 +47,22 @@ export default function useBilling() {
     [searchQuery, statusFilter]
   );
   const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
+  const prefetchingForQuery = prefetchingPages[cacheKey] ?? {};
 
   useEffect(() => {
     const next = page + 1;
 
-    if (!totalPages || next > totalPages || cachedPages[next]) {
+    if (
+      !totalPages ||
+      next > totalPages ||
+      cachedPages[next] ||
+      prefetchingForQuery[next]
+    ) {
       return;
     }
 
-    dispatch(fetchInvoicesRequest({ page: next, prefetch: true }));
-  }, [cachedPages, dispatch, page, totalPages]);
+    dispatch(prefetchInvoicesRequest({ page: next, queryKey: cacheKey }));
+  }, [cacheKey, cachedPages, dispatch, page, prefetchingForQuery, totalPages]);
 
   const fetchInvoices = useCallback((options = {}) => {
     dispatch(fetchInvoicesRequest(options));
@@ -63,14 +73,14 @@ export default function useBilling() {
   }, [dispatch]);
 
   const generateInvoice = useCallback(
-    (prescriptionId, onSuccess) =>
-      dispatch(generateInvoiceRequest({ prescriptionId, onSuccess })),
+    (prescriptionId) =>
+      dispatch(generateInvoiceRequest({ prescriptionId })),
     [dispatch]
   );
 
   const markAsPaid = useCallback(
-    (invoiceId, onSuccess) =>
-      dispatch(markPaidRequest({ invoiceId, onSuccess })),
+    (invoiceId) =>
+      dispatch(markPaidRequest({ invoiceId })),
     [dispatch]
   );
 
@@ -119,6 +129,7 @@ export default function useBilling() {
   );
 
   const dismissError = useCallback(() => dispatch(clearError()), [dispatch]);
+  const dismissSuccess = useCallback(() => dispatch(clearSuccess()), [dispatch]);
 
   return {
     invoices,
@@ -129,6 +140,7 @@ export default function useBilling() {
     summaryLoading,
     submitting,
     error,
+    success,
     statusFilter,
     searchQuery,
     page,
@@ -148,5 +160,6 @@ export default function useBilling() {
     selectInvoice,
     clearInvoice,
     dismissError,
+    dismissSuccess,
   };
 }

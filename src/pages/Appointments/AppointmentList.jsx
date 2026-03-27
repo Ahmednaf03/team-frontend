@@ -762,12 +762,34 @@ const AppointmentList = () => {
                 onChange: (page) => goToPage(page),
                 itemRender: (current, type, originalElement) => {
                   if (type === 'prev') {
-                    return <Button type="text" size="small">Prev</Button>;
+                    return (
+                      <Button
+                        size="small"
+                        style={{
+                          minWidth: 72,
+                          borderRadius: 10,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Prev
+                      </Button>
+                    );
                   }
                   if (type === 'next') {
-                    return <Button type="text" size="small">Next</Button>;
+                    return (
+                      <Button
+                        size="small"
+                        style={{
+                          minWidth: 72,
+                          borderRadius: 10,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Next
+                      </Button>
+                    );
                   }
-                  return originalElement;
+                  return null;
                 },
               }}
               locale={{

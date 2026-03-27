@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import styled, { keyframes, useTheme } from 'styled-components';
 import { Tag } from 'antd';
-import axios from 'axios';
 import axiosClient from '../../services/axiosClient';
 import {
   UserRound, HeartPulse, CalendarDays, FlaskConical,
-  ReceiptText, LogOut, Phone, MapPin, ShieldCheck,
+  ReceiptText, Phone, MapPin, ShieldCheck,
   Clock, CheckCircle2, XCircle, AlertCircle, Pill,
 } from 'lucide-react';
 
@@ -16,48 +15,7 @@ const fadeUp = keyframes`
 `;
 const spin = keyframes`to { transform: rotate(360deg); }`;
 
-/* ─── Shell ──────────────────────────────────────────────────────────────── */
-const Page = styled.div`
-  min-height: 100vh;
-  background: ${(p) => p.theme.colors.background};
-  font-family: 'DM Sans', sans-serif;
-`;
-
-const TopBar = styled.header`
-  background: ${(p) => p.theme.colors.surface};
-  border-bottom: 1px solid ${(p) => p.theme.colors.border};
-  padding: 14px 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-`;
-
-const Brand = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 18px;
-  font-weight: 700;
-  color: ${(p) => p.theme.colors.text};
-`;
-
-const LogoutBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: 1.5px solid ${(p) => p.theme.colors.border};
-  border-radius: 8px;
-  padding: 7px 14px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: ${(p) => p.theme.colors.textSecondary};
-  cursor: pointer;
-  transition: all 0.2s;
-  &:hover { border-color: #ef4444; color: #ef4444; }
-`;
-
+/* ─── Body ───────────────────────────────────────────────────────────────── */
 const Body = styled.main`
   max-width: 900px;
   margin: 0 auto;
@@ -356,246 +314,222 @@ export default function PatientProfile() {
     fetchProfile();
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('csrf_token');
-    window.location.href = '/patient-login';
-  };
-
   if (loading) return (
-    <Page>
-      <SpinnerWrap><Spinner /></SpinnerWrap>
-    </Page>
+    <SpinnerWrap><Spinner /></SpinnerWrap>
   );
 
   if (error) return (
-    <Page>
-      <SpinnerWrap>
-        <div style={{ textAlign: 'center', color: theme.colors.textSecondary }}>
-          <XCircle size={40} color="#ef4444" style={{ marginBottom: 12 }} />
-          <div style={{ fontSize: 15, fontWeight: 600 }}>{error}</div>
-        </div>
-      </SpinnerWrap>
-    </Page>
+    <SpinnerWrap>
+      <div style={{ textAlign: 'center', color: theme.colors.textSecondary }}>
+        <XCircle size={40} color="#ef4444" style={{ marginBottom: 12 }} />
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{error}</div>
+      </div>
+    </SpinnerWrap>
   );
 
   const { appointments = [], prescriptions = [], invoices = [] } = profile;
 
   return (
-    <Page>
+    <Body>
 
-      {/* ── Top bar ── */}
-      <TopBar>
-        <Brand>
-          <HeartPulse size={22} color={theme.colors.primary} />
-          NexaCare — Patient Portal
-        </Brand>
-        <LogoutBtn onClick={handleLogout}>
-          <LogOut size={14} /> Sign Out
-        </LogoutBtn>
-      </TopBar>
+      {/* ── Hero ── */}
+      <HeroCard>
+        <HeroAvatar>{initials(profile.name)}</HeroAvatar>
+        <div>
+          <HeroName>{profile.name}</HeroName>
+          <div style={{ fontSize: 13, opacity: 0.8 }}>Patient ID #{profile.id}</div>
+          <HeroMeta>
+            <HeroMetaItem><UserRound size={13} /> {profile.gender || '—'}, {profile.age} yrs</HeroMetaItem>
+            <HeroMetaItem><HeartPulse size={13} /> {profile.diagnosis || 'No diagnosis noted'}</HeroMetaItem>
+          </HeroMeta>
+        </div>
+      </HeroCard>
 
-      <Body>
-
-        {/* ── Hero ── */}
-        <HeroCard>
-          <HeroAvatar>{initials(profile.name)}</HeroAvatar>
+      {/* ── Info strip ── */}
+      <InfoStrip>
+        <InfoCard>
+          <InfoIcon><Phone size={16} /></InfoIcon>
           <div>
-            <HeroName>{profile.name}</HeroName>
-            <div style={{ fontSize: 13, opacity: 0.8 }}>Patient ID #{profile.id}</div>
-            <HeroMeta>
-              <HeroMetaItem><UserRound size={13} /> {profile.gender || '—'}, {profile.age} yrs</HeroMetaItem>
-              <HeroMetaItem><HeartPulse size={13} /> {profile.diagnosis || 'No diagnosis noted'}</HeroMetaItem>
-            </HeroMeta>
+            <InfoLabel>Phone</InfoLabel>
+            <InfoValue>{profile.phone || '—'}</InfoValue>
           </div>
-        </HeroCard>
+        </InfoCard>
+        <InfoCard>
+          <InfoIcon><MapPin size={16} /></InfoIcon>
+          <div>
+            <InfoLabel>Address</InfoLabel>
+            <InfoValue style={{ fontSize: 13 }}>{profile.address || '—'}</InfoValue>
+          </div>
+        </InfoCard>
+        <InfoCard>
+          <InfoIcon><CalendarDays size={16} /></InfoIcon>
+          <div>
+            <InfoLabel>Registered</InfoLabel>
+            <InfoValue>{fmtDate(profile.created_at)}</InfoValue>
+          </div>
+        </InfoCard>
+        <InfoCard>
+          <InfoIcon><ShieldCheck size={16} /></InfoIcon>
+          <div>
+            <InfoLabel>Status</InfoLabel>
+            <InfoValue style={{ color: '#16a34a' }}>Active</InfoValue>
+          </div>
+        </InfoCard>
+      </InfoStrip>
 
-        {/* ── Info strip ── */}
-        <InfoStrip>
-          <InfoCard>
-            <InfoIcon><Phone size={16} /></InfoIcon>
-            <div>
-              <InfoLabel>Phone</InfoLabel>
-              <InfoValue>{profile.phone || '—'}</InfoValue>
-            </div>
-          </InfoCard>
-          <InfoCard>
-            <InfoIcon><MapPin size={16} /></InfoIcon>
-            <div>
-              <InfoLabel>Address</InfoLabel>
-              <InfoValue style={{ fontSize: 13 }}>{profile.address || '—'}</InfoValue>
-            </div>
-          </InfoCard>
-          <InfoCard>
-            <InfoIcon><CalendarDays size={16} /></InfoIcon>
-            <div>
-              <InfoLabel>Registered</InfoLabel>
-              <InfoValue>{fmtDate(profile.created_at)}</InfoValue>
-            </div>
-          </InfoCard>
-          <InfoCard>
-            <InfoIcon><ShieldCheck size={16} /></InfoIcon>
-            <div>
-              <InfoLabel>Status</InfoLabel>
-              <InfoValue style={{ color: '#16a34a' }}>Active</InfoValue>
-            </div>
-          </InfoCard>
-        </InfoStrip>
+      {/* ── Appointments ── */}
+      <Section>
+        <SectionHeader>
+          <SectionIcon $color="#2563eb"><CalendarDays size={16} /></SectionIcon>
+          <SectionTitle>Appointments</SectionTitle>
+          <SectionCount>{appointments.length}</SectionCount>
+        </SectionHeader>
 
-        {/* ── Appointments ── */}
-        <Section>
-          <SectionHeader>
-            <SectionIcon $color="#2563eb"><CalendarDays size={16} /></SectionIcon>
-            <SectionTitle>Appointments</SectionTitle>
-            <SectionCount>{appointments.length}</SectionCount>
-          </SectionHeader>
+        {appointments.length === 0 ? (
+          <EmptyBox>No appointments on record yet.</EmptyBox>
+        ) : (
+          <CardList>
+            {appointments.map((appt) => {
+              const cfg = appointmentStatusConfig[appt.status] ?? appointmentStatusConfig.scheduled;
+              return (
+                <Card key={appt.id}>
+                  <CardRow>
+                    <div>
+                      <CardTitle>{fmtDateTime(appt.scheduled_at)}</CardTitle>
+                      <CardSub>Dr. {appt.doctor_name || 'Unknown'}</CardSub>
+                    </div>
+                    <Tag color={cfg.color} icon={cfg.icon} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
+                    </Tag>
+                  </CardRow>
+                  {appt.notes && (
+                    <CardMeta>
+                      <MetaChip>{appt.notes}</MetaChip>
+                    </CardMeta>
+                  )}
+                </Card>
+              );
+            })}
+          </CardList>
+        )}
+      </Section>
 
-          {appointments.length === 0 ? (
-            <EmptyBox>No appointments on record yet.</EmptyBox>
-          ) : (
-            <CardList>
-              {appointments.map((appt) => {
-                const cfg = appointmentStatusConfig[appt.status] ?? appointmentStatusConfig.scheduled;
-                return (
-                  <Card key={appt.id}>
-                    <CardRow>
-                      <div>
-                        <CardTitle>{fmtDateTime(appt.scheduled_at)}</CardTitle>
-                        <CardSub>Dr. {appt.doctor_name || 'Unknown'}</CardSub>
-                      </div>
-                      <Tag color={cfg.color} icon={cfg.icon} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {appt.status.charAt(0).toUpperCase() + appt.status.slice(1)}
-                      </Tag>
-                    </CardRow>
-                    {appt.notes && (
-                      <CardMeta>
-                        <MetaChip>{appt.notes}</MetaChip>
-                      </CardMeta>
-                    )}
-                  </Card>
-                );
-              })}
-            </CardList>
-          )}
-        </Section>
+      {/* ── Prescriptions ── */}
+      <Section>
+        <SectionHeader>
+          <SectionIcon $color="#7c3aed"><FlaskConical size={16} /></SectionIcon>
+          <SectionTitle>Prescriptions</SectionTitle>
+          <SectionCount>{prescriptions.length}</SectionCount>
+        </SectionHeader>
 
-        {/* ── Prescriptions ── */}
-        <Section>
-          <SectionHeader>
-            <SectionIcon $color="#7c3aed"><FlaskConical size={16} /></SectionIcon>
-            <SectionTitle>Prescriptions</SectionTitle>
-            <SectionCount>{prescriptions.length}</SectionCount>
-          </SectionHeader>
+        {prescriptions.length === 0 ? (
+          <EmptyBox>No prescriptions on record yet.</EmptyBox>
+        ) : (
+          <CardList>
+            {prescriptions.map((rx) => {
+              const cfg = rxStatusConfig[rx.status] ?? rxStatusConfig.PENDING;
+              return (
+                <Card key={rx.id}>
+                  <CardRow>
+                    <div>
+                      <CardTitle>Prescription #{rx.id}</CardTitle>
+                      <CardSub>Dr. {rx.doctor_name || 'Unknown'} · {fmtDate(rx.prescription_date)}</CardSub>
+                    </div>
+                    <Tag color={cfg.color} icon={cfg.icon} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {rx.status}
+                    </Tag>
+                  </CardRow>
 
-          {prescriptions.length === 0 ? (
-            <EmptyBox>No prescriptions on record yet.</EmptyBox>
-          ) : (
-            <CardList>
-              {prescriptions.map((rx) => {
-                const cfg = rxStatusConfig[rx.status] ?? rxStatusConfig.PENDING;
-                return (
-                  <Card key={rx.id}>
-                    <CardRow>
-                      <div>
-                        <CardTitle>Prescription #{rx.id}</CardTitle>
-                        <CardSub>Dr. {rx.doctor_name || 'Unknown'} · {fmtDate(rx.prescription_date)}</CardSub>
-                      </div>
-                      <Tag color={cfg.color} icon={cfg.icon} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {rx.status}
-                      </Tag>
-                    </CardRow>
+                  {rx.notes && (
+                    <CardMeta>
+                      <MetaChip><AlertCircle size={12} /> {rx.notes}</MetaChip>
+                    </CardMeta>
+                  )}
 
-                    {rx.notes && (
-                      <CardMeta>
-                        <MetaChip><AlertCircle size={12} /> {rx.notes}</MetaChip>
-                      </CardMeta>
-                    )}
-
-                    {rx.items && rx.items.length > 0 && (
-                      <MedTable>
-                        <thead>
-                          <tr>
-                            <MedTh>Medicine</MedTh>
-                            <MedTh>Dosage</MedTh>
-                            <MedTh>Frequency</MedTh>
-                            <MedTh>Duration</MedTh>
-                            <MedTh>Qty</MedTh>
+                  {rx.items && rx.items.length > 0 && (
+                    <MedTable>
+                      <thead>
+                        <tr>
+                          <MedTh>Medicine</MedTh>
+                          <MedTh>Dosage</MedTh>
+                          <MedTh>Frequency</MedTh>
+                          <MedTh>Duration</MedTh>
+                          <MedTh>Qty</MedTh>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rx.items.map((item) => (
+                          <tr key={item.id}>
+                            <MedTd>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <Pill size={12} color={theme.colors.primary} />
+                                {item.medicine_name}
+                              </span>
+                            </MedTd>
+                            <MedTd>{item.dosage || '—'}</MedTd>
+                            <MedTd>{item.frequency || '—'}</MedTd>
+                            <MedTd>{item.duration_days ? `${item.duration_days}d` : '—'}</MedTd>
+                            <MedTd>{item.quantity}</MedTd>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {rx.items.map((item) => (
-                            <tr key={item.id}>
-                              <MedTd>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                  <Pill size={12} color={theme.colors.primary} />
-                                  {item.medicine_name}
-                                </span>
-                              </MedTd>
-                              <MedTd>{item.dosage || '—'}</MedTd>
-                              <MedTd>{item.frequency || '—'}</MedTd>
-                              <MedTd>{item.duration_days ? `${item.duration_days}d` : '—'}</MedTd>
-                              <MedTd>{item.quantity}</MedTd>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </MedTable>
-                    )}
+                        ))}
+                      </tbody>
+                    </MedTable>
+                  )}
 
-                    {rx.dispensed_at && (
-                      <CardMeta style={{ marginTop: 8 }}>
-                        <MetaChip><CheckCircle2 size={12} color="#16a34a" /> Dispensed on {fmtDate(rx.dispensed_at)}</MetaChip>
-                      </CardMeta>
-                    )}
-                  </Card>
-                );
-              })}
-            </CardList>
-          )}
-        </Section>
+                  {rx.dispensed_at && (
+                    <CardMeta style={{ marginTop: 8 }}>
+                      <MetaChip><CheckCircle2 size={12} color="#16a34a" /> Dispensed on {fmtDate(rx.dispensed_at)}</MetaChip>
+                    </CardMeta>
+                  )}
+                </Card>
+              );
+            })}
+          </CardList>
+        )}
+      </Section>
 
-        {/* ── Invoices ── */}
-        <Section>
-          <SectionHeader>
-            <SectionIcon $color="#16a34a"><ReceiptText size={16} /></SectionIcon>
-            <SectionTitle>Billing & Invoices</SectionTitle>
-            <SectionCount>{invoices.length}</SectionCount>
-          </SectionHeader>
+      {/* ── Invoices ── */}
+      <Section>
+        <SectionHeader>
+          <SectionIcon $color="#16a34a"><ReceiptText size={16} /></SectionIcon>
+          <SectionTitle>Billing & Invoices</SectionTitle>
+          <SectionCount>{invoices.length}</SectionCount>
+        </SectionHeader>
 
-          {invoices.length === 0 ? (
-            <EmptyBox>No invoices on record yet.</EmptyBox>
-          ) : (
-            <CardList>
-              {invoices.map((inv) => {
-                const isPaid = inv.status === 'PAID';
-                return (
-                  <Card key={inv.id}>
-                    <CardRow>
-                      <div>
-                        <CardTitle>Invoice #{inv.id}</CardTitle>
-                        <CardSub>Prescription #{inv.prescription_id} · {fmtDate(inv.created_at)}</CardSub>
+        {invoices.length === 0 ? (
+          <EmptyBox>No invoices on record yet.</EmptyBox>
+        ) : (
+          <CardList>
+            {invoices.map((inv) => {
+              const isPaid = inv.status === 'PAID';
+              return (
+                <Card key={inv.id}>
+                  <CardRow>
+                    <div>
+                      <CardTitle>Invoice #{inv.id}</CardTitle>
+                      <CardSub>Prescription #{inv.prescription_id} · {fmtDate(inv.created_at)}</CardSub>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <Amount $paid={isPaid}>₹{Number(inv.total_amount).toFixed(2)}</Amount>
+                      <div style={{ marginTop: 4 }}>
+                        <Tag color={isPaid ? 'green' : 'orange'}>
+                          {inv.status}
+                        </Tag>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <Amount $paid={isPaid}>₹{Number(inv.total_amount).toFixed(2)}</Amount>
-                        <div style={{ marginTop: 4 }}>
-                          <Tag color={isPaid ? 'green' : 'orange'}>
-                            {inv.status}
-                          </Tag>
-                        </div>
-                      </div>
-                    </CardRow>
-                    {isPaid && inv.paid_at && (
-                      <CardMeta>
-                        <MetaChip><CheckCircle2 size={12} color="#16a34a" /> Paid on {fmtDate(inv.paid_at)}</MetaChip>
-                      </CardMeta>
-                    )}
-                  </Card>
-                );
-              })}
-            </CardList>
-          )}
-        </Section>
+                    </div>
+                  </CardRow>
+                  {isPaid && inv.paid_at && (
+                    <CardMeta>
+                      <MetaChip><CheckCircle2 size={12} color="#16a34a" /> Paid on {fmtDate(inv.paid_at)}</MetaChip>
+                    </CardMeta>
+                  )}
+                </Card>
+              );
+            })}
+          </CardList>
+        )}
+      </Section>
 
-      </Body>
-    </Page>
+    </Body>
   );
 }

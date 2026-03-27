@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Invoice 10</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f6f8; color: #2c3e50; padding: 32px; }
+    .sheet { max-width: 760px; margin: 0 auto; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 16px; padding: 28px; }
+    .title { font-size: 28px; font-weight: 700; margin-bottom: 6px; color: #3498db; }
+    .sub { color: #7f8c8d; margin-bottom: 22px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+    .card { border: 1px solid #e0e0e0; border-radius: 12px; padding: 14px; background: #f4f6f8; }
+    .label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+    .value { font-size: 16px; font-weight: 600; color: #2c3e50; }
+    .hero { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 22px; }
+    .amount { font-size: 30px; font-weight: 800; color: #2c3e50; }
+    .status { display:inline-block; padding: 6px 12px; border-radius: 999px; background: #d1fae5; color: #065f46; font-weight: 700; font-size: 12px; }
+    .footer { margin-top: 24px; color: #7f8c8d; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="hero">
+      <div>
+        <div class="title">Demo Hospital</div>
+        <div class="sub">Patient billing invoice</div>
+      </div>
+      <div>
+        <div class="status">PAID</div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card"><div class="label">Invoice ID</div><div class="value">10</div></div>
+      <div class="card"><div class="label">Prescription</div><div class="value">RX-13</div></div>
+      <div class="card"><div class="label">Patient</div><div class="value">james</div></div>
+      <div class="card"><div class="label">Amount</div><div class="value">₹30.00</div></div>
+      <div class="card"><div class="label">Payment Mode</div><div class="value">Card</div></div>
+      <div class="card"><div class="label">Payment Ref ID</div><div class="value">PAY-Y7KX5TIK</div></div>
+      <div class="card"><div class="label">Created On</div><div class="value">27 Mar 2026</div></div>
+      <div class="card"><div class="label">Paid On</div><div class="value">27 Mar 2026</div></div>
+    </div>
+    <div class="amount">₹30.00</div>
+    <div class="footer">Generated for james by Demo Hospital.</div>
+  </div>
+</body>
+</html>

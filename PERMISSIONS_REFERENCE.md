@@ -51,7 +51,7 @@ Source: `src/pages/Appointments/appointmentPermissions.js`
 | Create appointment | Yes | Yes | Yes | Yes |
 | Update or reschedule | Yes | Yes | No | No |
 | Cancel appointment | Yes | Yes | No | No |
-| Mark appointment completed | Yes | Yes | No | No |
+| Mark appointment completed | Yes | Yes | Yes | No |
 | Delete appointment | Yes | No | No | No |
 | Read patients for dropdown | Yes | Yes | Yes | Yes |
 | Read doctors for dropdown | Yes | Yes | Yes | Yes |
@@ -67,7 +67,7 @@ Source: `C:\wamp64\www\team-backend\src\routes\appointments.php`
 | `GET /api/appointments` | `provider`, `nurse`, `admin`, `receptionist` |
 | `GET /api/appointments/upcoming` | `provider`, `nurse`, `admin`, `receptionist` |
 | `POST /api/appointments` | `provider`, `nurse`, `admin`, `receptionist` |
-| `PUT /api/appointments/{id}` | `provider`, `admin` |
+| `PUT /api/appointments/{id}` | `provider`, `admin`, `nurse` |
 | `PATCH /api/appointments/{id}` cancel | `provider`, `admin` |
 | `DELETE /api/appointments/{id}` | `admin` |
 
@@ -116,7 +116,7 @@ Source: `C:\wamp64\www\team-backend\src\routes\billing.php`
 | `GET /api/billing` | `admin`, `provider` |
 | `GET /api/billing/summary` | `admin`, `provider` |
 | `POST /api/billing/{prescriptionId}` | `admin`, `provider`, `pharmacist` |
-| `PATCH /api/billing/{invoiceId}` | `admin` |
+| `PATCH /api/billing/{invoiceId}` | `admin`, `pharmacist` |
 
 ### Dashboard API
 
@@ -163,5 +163,35 @@ If the team needs one practical rule set for the current app behavior, use this:
 | Admin | Yes | Yes | Yes | Yes | Yes | Yes | No | Yes | Yes |
 | Provider | Yes | No | Yes, own appointments/notifications only | Yes | Yes | No | Yes | Yes | Security settings only |
 | Nurse | Yes | Add only in frontend; backend POST must allow it to work | Yes | Yes | No | No | Yes | No | Security settings only |
-| Pharmacist | No | No | No | No | No | No | Yes | Yes in frontend, backend read access must match | Security settings only |
+| Pharmacist | No | No | No | No | No | No | Yes | Yes, including mark paid when backend route allows it | Security settings only |
 | Receptionist | Yes | Add only in frontend; backend POST must allow it to work | Yes | Yes | No | No | No | No | Security settings only |
+
+## Patient Portal Access
+
+Source: `src/routes/AppRouter.jsx` (frontend), backend patient middleware
+
+### Patient Portal Routes (Frontend)
+
+| Route | Description |
+|---|---|
+| `/patient-login` | Patient login page |
+| `/patient-profile` | Patient profile — view own profile, appointments summary, prescriptions, invoices |
+| `/patient-appointments` | Patient appointments — view own appointments (list/calendar), book new appointments |
+
+### Patient Backend Permissions
+
+| Endpoint | Patient Access | Notes |
+|---|---|---|
+| `GET /api/appointments` | Own appointments only | Backend scopes to patient's own records via JWT |
+| `GET /api/appointments/upcoming` | Own upcoming only | Backend scopes to patient's own records via JWT |
+| `POST /api/appointments` | Create own appointment | Backend derives `patient_id` from JWT; patient sends `doctor_id`, `scheduled_at`, `notes` |
+| `GET /api/staff` | Provider-only listing | Backend narrows to active providers with reduced response shape for patient tokens |
+| `GET /api/patient/profile` | Own profile | Includes appointments, prescriptions, invoices summaries |
+
+### Patient Restrictions
+
+- Patient **cannot** update, cancel, or delete appointments (no PUT/PATCH/DELETE access)
+- Patient **cannot** access staff-only features: internal communication, confirm/complete actions, staff management
+- Patient **cannot** view other patients' data
+- Patient appointment responses include `doctor_name` for display without additional lookups
+

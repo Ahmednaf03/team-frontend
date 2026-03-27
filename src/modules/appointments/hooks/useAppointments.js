@@ -2,6 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchAppointmentsRequest,
+  prefetchAppointmentsRequest,
   fetchUpcomingRequest,
   fetchAppointmentByIdRequest,
   createAppointmentRequest,
@@ -37,9 +38,10 @@ export default function useAppointments() {
 
   const {
     list: appointments,
-    pageCache,
     upcoming,
     selected,
+    pageCache,
+    prefetchingPages,
     pagination,
     filters,
     loading,
@@ -50,24 +52,28 @@ export default function useAppointments() {
 
   const cacheKey = useMemo(() => buildPaginationCacheKey(filters), [filters]);
   const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
+  const prefetchingForQuery = prefetchingPages[cacheKey] ?? {};
 
   useEffect(() => {
-    const nextPage = pagination.currentPage + 1;
+    const next = pagination.currentPage + 1;
 
     if (
       !pagination.totalPages ||
-      nextPage > pagination.totalPages ||
-      cachedPages[nextPage]
+      next > pagination.totalPages ||
+      cachedPages[next] ||
+      prefetchingForQuery[next]
     ) {
       return;
     }
 
-    dispatch(fetchAppointmentsRequest({ page: nextPage, prefetch: true }));
+    dispatch(prefetchAppointmentsRequest({ page: next, queryKey: cacheKey }));
   }, [
+    cacheKey,
     cachedPages,
     dispatch,
     pagination.currentPage,
     pagination.totalPages,
+    prefetchingForQuery,
   ]);
 
   // ── Data fetching ───────────────────────────────────────────────────────────

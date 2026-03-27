@@ -1,4 +1,4 @@
-import { call, put, takeLatest, select } from 'redux-saga/effects';
+import { call, put, takeLatest, takeEvery, select } from 'redux-saga/effects';
 import {
   fetchAppointmentsAPI,
   fetchAppointmentByIdAPI,
@@ -21,6 +21,9 @@ import {
   fetchAppointmentsRequest,
   fetchAppointmentsSuccess,
   fetchAppointmentsFailure,
+  prefetchAppointmentsRequest,
+  prefetchAppointmentsSuccess,
+  prefetchAppointmentsFailure,
   hydrateAppointmentsFromCache,
   fetchUpcomingRequest,
   fetchUpcomingSuccess,
@@ -82,7 +85,6 @@ function* handleFetchAppointments(action) {
     const isProvider = currentRole === 'provider';
 
     const requestedPage = action.payload?.page ?? pagination.currentPage;
-    const prefetch = Boolean(action.payload?.prefetch);
     const force = Boolean(action.payload?.force);
 
     const queryKey = buildPaginationCacheKey(filters);
@@ -92,9 +94,7 @@ function* handleFetchAppointments(action) {
     );
 
     if (cachedPage && !force) {
-      if (!prefetch) {
-        yield put(hydrateAppointmentsFromCache({ page: requestedPage, queryKey }));
-      }
+      yield put(hydrateAppointmentsFromCache({ page: requestedPage, queryKey }));
       return;
     }
 
@@ -146,7 +146,6 @@ function* handleFetchAppointments(action) {
         pagination: responseData.pagination ?? null,
         page: requestedPage,
         queryKey,
-        prefetch,
       })
     );
   } catch (error) {
@@ -154,7 +153,90 @@ function* handleFetchAppointments(action) {
       error.response?.data?.message ||
       error.response?.data?.error ||
       'Failed to fetch appointments.';
-    yield put(fetchAppointmentsFailure({ message, prefetch: action.payload?.prefetch }));
+    yield put(fetchAppointmentsFailure(message));
+  }
+}
+
+function* handlePrefetchAppointments(action) {
+  try {
+    const { filters, pagination } = yield select((state) => state.appointments);
+    const currentUser = yield select((state) => state.auth.user);
+    const currentRole = String(currentUser?.role || '').toLowerCase();
+    const isProvider = currentRole === 'provider';
+
+    const requestedPage = action.payload?.page;
+    const queryKey = action.payload?.queryKey ?? buildPaginationCacheKey(filters);
+
+    if (!requestedPage) {
+      return;
+    }
+
+    const cachedPage = yield select(
+      (state) => state.appointments.pageCache[queryKey]?.[requestedPage]
+    );
+
+    if (cachedPage) {
+      yield put(prefetchAppointmentsFailure({ page: requestedPage, queryKey }));
+      return;
+    }
+
+    const params = {
+      page: requestedPage,
+      per_page: pagination.perPage,
+      ...(filters.status && { status: filters.status }),
+      ...((isProvider ? currentUser?.id : filters.doctorId) && {
+        doctor_id: isProvider ? currentUser.id : filters.doctorId,
+      }),
+      ...(filters.patientId && { patient_id: filters.patientId }),
+      ...(filters.dateFrom && { date_from: filters.dateFrom }),
+      ...(filters.dateTo && { date_to: filters.dateTo }),
+      ...(filters.search && { search: filters.search }),
+    };
+
+    const responseData = yield call(fetchAppointmentsAPI, params);
+
+    const enrichedData = extractCollection(responseData).map((appointment) =>
+      enrichAppointment(appointment)
+    );
+
+    const appointmentIds = enrichedData
+      .map((appointment) => appointment.id)
+      .filter(Boolean);
+
+    const latestNotesResponse = appointmentIds.length
+      ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
+      : { data: [] };
+
+    const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
+
+    const hydratedData = enrichedData.map((appointment) =>
+      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
+        ? { ...appointment, notes: latestNotesMap[appointment.id] }
+        : appointment
+    );
+
+    const scopedData = isProvider
+      ? hydratedData.filter(
+          (appointment) =>
+            Number(appointment.doctor_id) === Number(currentUser?.id)
+        )
+      : hydratedData;
+
+    yield put(
+      prefetchAppointmentsSuccess({
+        data: scopedData,
+        pagination: responseData.pagination ?? null,
+        page: requestedPage,
+        queryKey,
+      })
+    );
+  } catch (error) {
+    yield put(
+      prefetchAppointmentsFailure({
+        page: action.payload?.page,
+        queryKey: action.payload?.queryKey,
+      })
+    );
   }
 }
 
@@ -224,10 +306,21 @@ function* handleCreateAppointment(action) {
 // ── Update ────────────────────────────────────────────────────────────────
 function* handleUpdateAppointment(action) {
   try {
+    const { pagination } = yield select((state) => state.appointments);
     const responseData = yield call(updateAppointmentAPI, action.payload);
-    yield put(updateAppointmentSuccess(responseData.message || responseData));
+    yield put(
+      updateAppointmentSuccess({
+        message: responseData.message || responseData,
+        updatedAppointment: action.payload,
+      })
+    );
 
-    yield put(fetchAppointmentsRequest());
+    yield put(
+      fetchAppointmentsRequest({
+        page: pagination.currentPage,
+        force: true,
+      })
+    );
     yield put(fetchUpcomingRequest());
   } catch (error) {
     const message =
@@ -241,10 +334,16 @@ function* handleUpdateAppointment(action) {
 // ── Cancel ────────────────────────────────────────────────────────────────
 function* handleCancelAppointment(action) {
   try {
+    const { pagination } = yield select((state) => state.appointments);
     const responseData = yield call(cancelAppointmentAPI, action.payload);
     yield put(cancelAppointmentSuccess(responseData.message || responseData));
 
-    yield put(fetchAppointmentsRequest());
+    yield put(
+      fetchAppointmentsRequest({
+        page: pagination.currentPage,
+        force: true,
+      })
+    );
     yield put(fetchUpcomingRequest());
   } catch (error) {
     const message =
@@ -270,6 +369,7 @@ function* handleDeleteAppointment(action) {
 // ── Root watcher ──────────────────────────────────────────────────────────
 export default function* appointmentSaga() {
   yield takeLatest(fetchAppointmentsRequest.type, handleFetchAppointments);
+  yield takeEvery(prefetchAppointmentsRequest.type, handlePrefetchAppointments);
   yield takeLatest(fetchUpcomingRequest.type, handleFetchUpcoming);
   yield takeLatest(fetchAppointmentByIdRequest.type, handleFetchAppointmentById);
   yield takeLatest(createAppointmentRequest.type, handleCreateAppointment);

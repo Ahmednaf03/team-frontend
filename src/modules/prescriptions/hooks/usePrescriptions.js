@@ -2,6 +2,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   fetchPrescriptionsRequest,
+  prefetchPrescriptionsRequest,
   fetchPrescriptionByIdRequest,
   createPrescriptionRequest,
   addItemRequest,
@@ -13,46 +14,59 @@ import {
   prevPage,
   clearCurrentPrescription,
   clearError,
+  clearSuccess,
 } from '../prescriptionSlice';
 import { buildPaginationCacheKey } from '../../../utils/paginationCache';
 
 export default function usePrescriptions() {
   const dispatch = useDispatch();
+  const currentUser = useSelector((state) => state.auth.user);
 
   const {
     list: prescriptions,
     pageCache,
+    prefetchingPages,
     currentPrescription,
     loading,
     detailLoading,
     submitting,
     error,
+    success,
     searchQuery,
     statusFilter,
     pagination,
   } = useSelector((state) => state.prescriptions);
 
   const { page, pageSize, total, totalPages, hasNext, hasPrev } = pagination;
+  const currentRole = String(currentUser?.role || '').toLowerCase();
 
   const cacheKey = useMemo(
     () =>
       buildPaginationCacheKey({
         search: searchQuery,
         status: statusFilter,
+        scopeRole: currentRole,
+        scopeUserId: currentRole === 'provider' ? String(currentUser?.id || '') : '',
       }),
-    [searchQuery, statusFilter]
+    [currentRole, currentUser?.id, searchQuery, statusFilter]
   );
   const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
+  const prefetchingForQuery = prefetchingPages[cacheKey] ?? {};
 
   useEffect(() => {
     const next = page + 1;
 
-    if (!totalPages || next > totalPages || cachedPages[next]) {
+    if (
+      !totalPages ||
+      next > totalPages ||
+      cachedPages[next] ||
+      prefetchingForQuery[next]
+    ) {
       return;
     }
 
-    dispatch(fetchPrescriptionsRequest({ page: next, prefetch: true }));
-  }, [cachedPages, dispatch, page, totalPages]);
+    dispatch(prefetchPrescriptionsRequest({ page: next, queryKey: cacheKey }));
+  }, [cacheKey, cachedPages, dispatch, page, prefetchingForQuery, totalPages]);
 
   const fetchPrescriptions = useCallback((options = {}) => {
     dispatch(fetchPrescriptionsRequest(options));
@@ -69,23 +83,23 @@ export default function usePrescriptions() {
   );
 
   const createPrescription = useCallback(
-    (data, onSuccess) => dispatch(createPrescriptionRequest({ data, onSuccess })),
+    (data) => dispatch(createPrescriptionRequest({ data })),
     [dispatch]
   );
 
   const addItem = useCallback(
-    (data, prescriptionId, onSuccess) =>
-      dispatch(addItemRequest({ data, prescriptionId, onSuccess })),
+    (data, prescriptionId) =>
+      dispatch(addItemRequest({ data, prescriptionId })),
     [dispatch]
   );
 
   const verify = useCallback(
-    (id, onSuccess) => dispatch(verifyRequest({ id, onSuccess })),
+    (id) => dispatch(verifyRequest({ id })),
     [dispatch]
   );
 
   const dispense = useCallback(
-    (id, onSuccess) => dispatch(dispenseRequest({ id, onSuccess })),
+    (id) => dispatch(dispenseRequest({ id })),
     [dispatch]
   );
 
@@ -110,20 +124,21 @@ export default function usePrescriptions() {
       return;
     }
 
-    dispatch(nextPage());
+    dispatch(nextPage({ queryKey: cacheKey }));
     dispatch(fetchPrescriptionsRequest({ page: page + 1 }));
-  }, [dispatch, hasNext, page]);
+  }, [cacheKey, dispatch, hasNext, page]);
 
   const goPrev = useCallback(() => {
     if (!hasPrev) {
       return;
     }
 
-    dispatch(prevPage());
+    dispatch(prevPage({ queryKey: cacheKey }));
     dispatch(fetchPrescriptionsRequest({ page: page - 1 }));
-  }, [dispatch, hasPrev, page]);
+  }, [cacheKey, dispatch, hasPrev, page]);
 
   const dismissError = useCallback(() => dispatch(clearError()), [dispatch]);
+  const dismissSuccess = useCallback(() => dispatch(clearSuccess()), [dispatch]);
 
   return {
     prescriptions,
@@ -133,6 +148,7 @@ export default function usePrescriptions() {
     detailLoading,
     submitting,
     error,
+    success,
     searchQuery,
     statusFilter,
     page,
@@ -153,5 +169,6 @@ export default function usePrescriptions() {
     goNext,
     goPrev,
     dismissError,
+    dismissSuccess,
   };
 }
