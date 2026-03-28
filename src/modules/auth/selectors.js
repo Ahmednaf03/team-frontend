@@ -23,6 +23,7 @@ export const selectUserPermissions = (state) => state.auth.user?.permissions ?? 
 export const selectHasPermission = (permissionKey) => (state) =>
   state.auth.user?.permissions?.includes(permissionKey) ?? false;
 
-export const selectIsAdmin  = (state) => state.auth.user?.role === 'Admin';
+export const selectIsAdmin  = (state) =>
+  String(state.auth.user?.role || '').toLowerCase() === 'admin';
 export const selectIsDoctor = (state) =>
   ['Provider', 'Doctor'].includes(state.auth.user?.role);

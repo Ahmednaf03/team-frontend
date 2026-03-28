@@ -2,11 +2,13 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useCallback, useMemo } from 'react';
 import {
   fetchNotificationsRequest,
+  createBroadcastRequest,
   markAsReadRequest,
   markAllAsReadRequest,
   clearAllRequest,
   setFilter,
   clearError,
+  clearSuccess,
 } from '../notificationSlice';
 
 /**
@@ -31,6 +33,8 @@ export default function useNotification() {
     unreadCount,
     activeFilter,
     loading,
+    creating,
+    success,
     error,
   } = useSelector((state) => state.notifications);
 
@@ -47,6 +51,11 @@ export default function useNotification() {
 
   const markAsRead = useCallback(
     (id) => dispatch(markAsReadRequest(id)),
+    [dispatch]
+  );
+
+  const createBroadcastNotification = useCallback(
+    (payload) => dispatch(createBroadcastRequest(payload)),
     [dispatch]
   );
 
@@ -70,18 +79,27 @@ export default function useNotification() {
     [dispatch]
   );
 
+  const dismissSuccess = useCallback(
+    () => dispatch(clearSuccess()),
+    [dispatch]
+  );
+
   return {
     notifications,
     filteredNotifications,
     unreadCount,
     activeFilter,
     loading,
+    creating,
+    success,
     error,
     fetchNotifications,
+    createBroadcastNotification,
     markAsRead,
     markAllAsRead,
     clearAll,
     changeFilter,
     dismissError,
+    dismissSuccess,
   };
 }

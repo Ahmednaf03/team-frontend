@@ -6,6 +6,7 @@ const TYPE_ICONS = {
   appointment: '📅',
   payment:     '💳',
   system:      '🔔',
+  maintenance: '🛠️',
 };
 
 const TOAST_DURATION = 4000; // ms

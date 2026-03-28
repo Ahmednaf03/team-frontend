@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Spin, Tooltip } from 'antd';
+import { Modal, Spin, Tooltip } from 'antd';
+import { toast } from 'react-hot-toast';
+import { useSelector } from 'react-redux';
 import useNotification from '../../modules/notifications/hooks/useNotification';
+import { selectIsAdmin } from '../../modules/auth/selectors';
 import NotificationToast from './NotificationToast';
 import {
   BellWrapper,
@@ -41,38 +44,64 @@ const TYPE_ICONS = {
   appointment: '📅',
   payment:     '💳',
   system:      '🔔',
+  maintenance: '🛠️',
 };
 
 const FILTER_OPTIONS = [
   { key: 'all',         label: 'All' },
   { key: 'appointment', label: 'Appointments' },
   { key: 'payment',     label: 'Payments' },
+  { key: 'maintenance', label: 'Maintenance' },
   { key: 'system',      label: 'System' },
 ];
 
+const EMPTY_FORM = {
+  title: '',
+  message: '',
+  starts_at: '',
+  ends_at: '',
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 const NotificationPanel = () => {
+  const isAdmin = useSelector(selectIsAdmin);
   const {
     filteredNotifications,
     unreadCount,
     activeFilter,
     loading,
+    creating,
+    success,
     error,
     fetchNotifications,
+    createBroadcastNotification,
     markAsRead,
     markAllAsRead,
     clearAll,
     changeFilter,
     dismissError,
+    dismissSuccess,
   } = useNotification();
 
   const [open, setOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [formError, setFormError] = useState('');
   const panelRef = useRef(null);
 
   // ── Fetch on mount ──────────────────────────────────────────────────────
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  useEffect(() => {
+    if (!success) return;
+    toast.success(success, { id: 'maintenance-broadcast-success' });
+    dismissSuccess();
+    setModalOpen(false);
+    setForm(EMPTY_FORM);
+    setFormError('');
+  }, [dismissSuccess, success]);
 
   // ── Close on outside click ──────────────────────────────────────────────
   useEffect(() => {
@@ -91,6 +120,64 @@ const NotificationPanel = () => {
     },
     [markAsRead]
   );
+
+  const handleOpenModal = useCallback(() => {
+    setModalOpen(true);
+    setFormError('');
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    if (creating) return;
+    setModalOpen(false);
+    setForm(EMPTY_FORM);
+    setFormError('');
+  }, [creating]);
+
+  const handleSubmit = useCallback(() => {
+    if (!form.title.trim() || !form.message.trim() || !form.starts_at || !form.ends_at) {
+      setFormError('All fields are required.');
+      return;
+    }
+
+    if (new Date(form.ends_at) <= new Date(form.starts_at)) {
+      setFormError('End time must be after start time.');
+      return;
+    }
+
+    setFormError('');
+    createBroadcastNotification({
+      type: 'maintenance',
+      audience: 'staff',
+      title: form.title.trim(),
+      message: form.message.trim(),
+      starts_at: form.starts_at,
+      ends_at: form.ends_at,
+    });
+  }, [createBroadcastNotification, form]);
+
+  const formatWindow = useCallback((notification) => {
+    const startValue = notification.starts_at || notification.startsAt;
+    const endValue = notification.ends_at || notification.endsAt;
+
+    if (!startValue || !endValue) {
+      return timeAgo(notification.timestamp);
+    }
+
+    const startText = new Date(startValue).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    const endText = new Date(endValue).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    return `${startText} - ${endText}`;
+  }, []);
 
   return (
     <>
@@ -117,6 +204,14 @@ const NotificationPanel = () => {
                 )}
               </PanelTitle>
               <HeaderActions>
+                {isAdmin && (
+                  <TextButton
+                    onClick={handleOpenModal}
+                    title="Send maintenance notification"
+                  >
+                    Send notice
+                  </TextButton>
+                )}
                 <TextButton
                   onClick={markAllAsRead}
                   disabled={unreadCount === 0}
@@ -182,7 +277,7 @@ const NotificationPanel = () => {
                     <ItemBody>
                       <ItemTitle unread={!n.read}>{n.title}</ItemTitle>
                       <ItemMessage>{n.message}</ItemMessage>
-                      <ItemTime>{timeAgo(n.timestamp)}</ItemTime>
+                      <ItemTime>{formatWindow(n)}</ItemTime>
                     </ItemBody>
                     {!n.read && <UnreadDot />}
                   </NotificationItem>
@@ -202,6 +297,72 @@ const NotificationPanel = () => {
 
       {/* ── Toast popup for new notifications ── */}
       <NotificationToast />
+
+      <Modal
+        open={modalOpen}
+        title="Broadcast Maintenance Notice"
+        onCancel={handleCloseModal}
+        onOk={handleSubmit}
+        okText={creating ? 'Sending...' : 'Send notice'}
+        okButtonProps={{ loading: creating }}
+        cancelButtonProps={{ disabled: creating }}
+        destroyOnClose
+      >
+        <div style={{ display: 'grid', gap: 12, marginTop: 8 }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Title</span>
+            <input
+              type="text"
+              value={form.title}
+              maxLength={120}
+              onChange={(e) => setForm((current) => ({ ...current, title: e.target.value }))}
+              placeholder="Scheduled Maintenance"
+              style={{ height: 38, borderRadius: 8, border: '1px solid #d9d9d9', padding: '0 12px' }}
+            />
+          </label>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>Message</span>
+            <textarea
+              value={form.message}
+              rows={4}
+              onChange={(e) => setForm((current) => ({ ...current, message: e.target.value }))}
+              placeholder="From 8 PM to 10 PM, the service will be unavailable."
+              style={{ borderRadius: 8, border: '1px solid #d9d9d9', padding: '10px 12px', resize: 'vertical' }}
+            />
+          </label>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>Start Time</span>
+              <input
+                type="datetime-local"
+                value={form.starts_at}
+                onChange={(e) => setForm((current) => ({ ...current, starts_at: e.target.value }))}
+                style={{ height: 38, borderRadius: 8, border: '1px solid #d9d9d9', padding: '0 12px' }}
+              />
+            </label>
+
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>End Time</span>
+              <input
+                type="datetime-local"
+                value={form.ends_at}
+                onChange={(e) => setForm((current) => ({ ...current, ends_at: e.target.value }))}
+                style={{ height: 38, borderRadius: 8, border: '1px solid #d9d9d9', padding: '0 12px' }}
+              />
+            </label>
+          </div>
+
+          {formError ? (
+            <div style={{ color: '#dc2626', fontSize: 12 }}>{formError}</div>
+          ) : (
+            <div style={{ color: '#64748b', fontSize: 12 }}>
+              This notice will be sent to all active staff in the current tenant.
+            </div>
+          )}
+        </div>
+      </Modal>
     </>
   );
 };

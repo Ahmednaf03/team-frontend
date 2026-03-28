@@ -21,6 +21,8 @@ const initialState = {
   unreadCount: 0,
   activeFilter: 'all',
   loading: false,
+  creating: false,
+  success: null,
   error: null,
 };
 
@@ -46,8 +48,20 @@ const notificationSlice = createSlice({
       state.loading = false;
       state.error = action.payload;
     },
-
-
+    createBroadcastRequest: (state) => {
+      state.creating = true;
+      state.error = null;
+      state.success = null;
+    },
+    createBroadcastSuccess: (state, action) => {
+      state.creating = false;
+      state.success =
+        action.payload?.message || 'Maintenance notification sent successfully.';
+    },
+    createBroadcastFailure: (state, action) => {
+      state.creating = false;
+      state.error = action.payload;
+    },
 
     // ── Mark single as read ──────────────────────────────────────────────────
     markAsReadRequest: (state, action) => {
@@ -94,6 +108,9 @@ const notificationSlice = createSlice({
     clearError: (state) => {
       state.error = null;
     },
+    clearSuccess: (state) => {
+      state.success = null;
+    },
   },
 });
 
@@ -101,6 +118,9 @@ export const {
   fetchNotificationsRequest,
   fetchNotificationsSuccess,
   fetchNotificationsFailure,
+  createBroadcastRequest,
+  createBroadcastSuccess,
+  createBroadcastFailure,
   markAsReadRequest,
   markAsReadFailure,
   markAllAsReadRequest,
@@ -109,6 +129,7 @@ export const {
   clearAllFailure,
   setFilter,
   clearError,
+  clearSuccess,
 } = notificationSlice.actions;
 
 export default notificationSlice.reducer;

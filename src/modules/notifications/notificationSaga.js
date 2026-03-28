@@ -4,6 +4,7 @@ import {
   markAsReadAPI,
   markAllAsReadAPI,
   clearAllNotificationsAPI,
+  createBroadcastNotificationAPI,
 } from './notificationAPI';
 import { fetchAppointmentsAPI } from '../appointments/appointmentAPI';
 import { extractCollection, enrichAppointment } from '../../utils/appointmentMapping';
@@ -11,6 +12,9 @@ import {
   fetchNotificationsRequest,
   fetchNotificationsSuccess,
   fetchNotificationsFailure,
+  createBroadcastRequest,
+  createBroadcastSuccess,
+  createBroadcastFailure,
   markAsReadRequest,
   markAsReadFailure,
   markAllAsReadRequest,
@@ -48,8 +52,7 @@ function* handleFetchNotifications() {
     const currentUser = yield select((state) => state.auth.user);
     const currentRole = String(currentUser?.role || '').toLowerCase();
     const responseData = yield call(fetchNotificationsAPI);
-    const list = responseData.data ?? responseData;
-    const arrayList = Array.isArray(list) ? list : [];
+    const arrayList = extractCollection(responseData);
     // Map backend `is_read` to frontend `read`
     // Map backend `created_at` to frontend `timestamp`
     const mappedList = arrayList.map(n => ({
@@ -121,9 +124,24 @@ function* handleClearAll() {
   }
 }
 
+function* handleCreateBroadcast(action) {
+  try {
+    const responseData = yield call(createBroadcastNotificationAPI, action.payload);
+    yield put(createBroadcastSuccess(responseData));
+    yield put(fetchNotificationsRequest());
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.data?.error ||
+      'Failed to send maintenance notification.';
+    yield put(createBroadcastFailure(message));
+  }
+}
+
 // ── Root watcher ──────────────────────────────────────────────────────────────
 export default function* notificationSaga() {
   yield takeLatest(fetchNotificationsRequest.type, handleFetchNotifications);
+  yield takeLatest(createBroadcastRequest.type, handleCreateBroadcast);
   yield takeLatest(markAsReadRequest.type, handleMarkAsRead);
   yield takeLatest(markAllAsReadRequest.type, handleMarkAllAsRead);
   yield takeLatest(clearAllRequest.type, handleClearAll);

@@ -47,3 +47,11 @@ export const clearAllNotificationsAPI = async () => {
   });
   return response.data;
 };
+
+export const createBroadcastNotificationAPI = async (payload) => {
+  const response = await axiosClient.post('/notifications/broadcast', payload, {
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.data;
+};
