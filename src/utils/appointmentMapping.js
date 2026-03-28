@@ -1,3 +1,5 @@
+import { getEntityDisplayName } from './entityDisplay';
+
 const isPlainObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -39,27 +41,6 @@ export const unwrapAppointment = (payload) => {
   }
 
   return payload;
-};
-
-const getDisplayName = (entity) => {
-  if (!entity) return '';
-  if (typeof entity === 'string') return entity;
-
-  const firstName = entity.first_name || entity.firstName || '';
-  const lastName = entity.last_name || entity.lastName || '';
-  const combinedName = `${firstName} ${lastName}`.trim();
-
-  return (
-    entity.full_name ||
-    entity.fullName ||
-    entity.display_name ||
-    entity.displayName ||
-    entity.name ||
-    entity.username ||
-    entity.email ||
-    combinedName ||
-    ''
-  );
 };
 
 const getFallbackPatientName = (id) =>
@@ -112,7 +93,7 @@ export const buildLookupMap = (records = []) =>
     if (!record) return acc;
 
     const key = Number(record.id ?? record.value);
-    const label = getDisplayName(record);
+    const label = getEntityDisplayName(record);
 
     if (Number.isFinite(key) && label) {
       acc[key] = label;
@@ -138,14 +119,14 @@ export const enrichAppointment = (rawAppointment, lookups = {}) => {
   const rawPatientName =
     appt.patient_name ||
     appt.patientName ||
-    getDisplayName(appt.patient);
+    getEntityDisplayName(appt.patient);
 
   const rawDoctorName =
     appt.doctor_name ||
     appt.doctorName ||
-    getDisplayName(appt.doctor) ||
-    getDisplayName(appt.staff) ||
-    getDisplayName(appt.provider);
+    getEntityDisplayName(appt.doctor) ||
+    getEntityDisplayName(appt.staff) ||
+    getEntityDisplayName(appt.provider);
 
   const patientName =
     (!isGenericPatientName(rawPatientName, patientId) && rawPatientName) ||

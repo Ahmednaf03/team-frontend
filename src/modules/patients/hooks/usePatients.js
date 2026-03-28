@@ -1,5 +1,5 @@
 import { useDispatch, useSelector } from 'react-redux';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   fetchPatientsRequest,
   fetchPatientByIdRequest,
@@ -35,17 +35,6 @@ export default function usePatients() {
     () => buildPaginationCacheKey({ search: searchQuery }),
     [searchQuery]
   );
-  const cachedPages = useMemo(() => pageCache[cacheKey] ?? {}, [cacheKey, pageCache]);
-
-  useEffect(() => {
-    const next = page + 1;
-
-    if (!totalPages || next > totalPages || cachedPages[next]) {
-      return;
-    }
-
-    dispatch(fetchPatientsRequest({ page: next, prefetch: true }));
-  }, [cachedPages, dispatch, page, totalPages]);
 
   const fetchPatients = useCallback((options = {}) => {
     dispatch(fetchPatientsRequest(options));

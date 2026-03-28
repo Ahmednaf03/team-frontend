@@ -2,32 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import axiosClient from '../../services/axiosClient';
 import { buildLookupMap, extractCollection } from '../../utils/appointmentMapping';
+import { getEntityDisplayName } from '../../utils/entityDisplay';
 import { selectUserRole } from '../../modules/auth/selectors';
 import { getAppointmentRoleCapabilities } from './appointmentPermissions';
 
-const getDisplayName = (record) => {
-  if (!record) return '';
-
-  const firstName = record.first_name || record.firstName || '';
-  const lastName = record.last_name || record.lastName || '';
-  const combinedName = `${firstName} ${lastName}`.trim();
-
-  return (
-    record.full_name ||
-    record.fullName ||
-    record.display_name ||
-    record.displayName ||
-    record.name ||
-    record.username ||
-    combinedName ||
-    record.email ||
-    ''
-  );
-};
-
 const mapToOption = (record) => {
   const value = Number(record?.id ?? record?.value);
-  const label = getDisplayName(record);
+  const label = getEntityDisplayName(record);
 
   if (!Number.isFinite(value) || !label) {
     return null;
@@ -143,7 +124,7 @@ export default function useAppointmentReferenceData() {
         staffMembers
           .map((item) => ({
             id: item?.id,
-            name: getDisplayName(item),
+            name: getEntityDisplayName(item),
           }))
           .filter((item) => item.id && item.name)
       ),

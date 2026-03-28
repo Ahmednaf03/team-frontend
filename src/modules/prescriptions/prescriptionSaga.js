@@ -7,6 +7,8 @@ import {
   verifyPrescriptionAPI,
   dispensePrescriptionAPI,
 } from './prescriptionAPI';
+import { fetchAllPatientsAPI } from '../patients/patientAPI';
+import { fetchAllStaffAPI } from '../staff/staffAPI';
 import { buildPaginationCacheKey } from '../../utils/paginationCache';
 import { extractCollection } from '../../utils/appointmentMapping';
 import {
@@ -33,14 +35,84 @@ import {
   dispenseSuccess,
   dispenseFailure,
 } from './prescriptionSlice';
+import { getEntityDisplayName, matchesSearch } from '../../utils/entityDisplay';
+
+const buildLookup = (records = []) =>
+  records.reduce((acc, record) => {
+    const id = Number(record?.id);
+    const name = getEntityDisplayName(record);
+
+    if (Number.isFinite(id) && name) {
+      acc[id] = name;
+    }
+
+    return acc;
+  }, {});
+
+const isDoctorRecord = (record) => {
+  const roleValue = `${record?.role || record?.staff_role || record?.designation || ''}`.toLowerCase();
+
+  return (
+    roleValue === 'provider' ||
+    roleValue.includes('doctor') ||
+    roleValue.includes('physician')
+  );
+};
+
+const fetchPrescriptionLookups = async () => {
+  const [patientsEnvelope, staffEnvelope] = await Promise.all([
+    fetchAllPatientsAPI({ per_page: 500 }).catch(() => ({ data: [] })),
+    fetchAllStaffAPI({ per_page: 500 }).catch(() => ({ data: [] })),
+  ]);
+
+  const patientRecords = Array.isArray(patientsEnvelope?.data) ? patientsEnvelope.data : [];
+  const staffRecords = Array.isArray(staffEnvelope?.data) ? staffEnvelope.data : [];
+
+  return {
+    patients: buildLookup(patientRecords),
+    doctors: buildLookup(staffRecords.filter(isDoctorRecord)),
+  };
+};
+
+const getPrescriptionPatientId = (prescription) =>
+  Number(
+    prescription?.patient_id ??
+      prescription?.patient?.id ??
+      prescription?.appointment?.patient_id
+  );
 
 const getPrescriptionDoctorId = (prescription) =>
   Number(
     prescription?.doctor_id ??
       prescription?.doctor?.id ??
       prescription?.provider?.id ??
-      prescription?.staff?.id
+      prescription?.staff?.id ??
+      prescription?.appointment?.doctor_id
   );
+
+const getPrescriptionPatientName = (prescription, lookups = {}) =>
+  prescription?.patient_name ||
+  prescription?.patientName ||
+  getEntityDisplayName(prescription?.patient) ||
+  getEntityDisplayName(prescription?.appointment?.patient) ||
+  lookups?.patients?.[getPrescriptionPatientId(prescription)] ||
+  '';
+
+const getPrescriptionDoctorName = (prescription, lookups = {}) =>
+  prescription?.doctor_name ||
+  prescription?.doctorName ||
+  getEntityDisplayName(prescription?.doctor) ||
+  getEntityDisplayName(prescription?.provider) ||
+  getEntityDisplayName(prescription?.staff) ||
+  getEntityDisplayName(prescription?.appointment?.doctor) ||
+  lookups?.doctors?.[getPrescriptionDoctorId(prescription)] ||
+  '';
+
+const enrichPrescription = (prescription, lookups = {}) => ({
+  ...prescription,
+  patient_name: getPrescriptionPatientName(prescription, lookups),
+  doctor_name: getPrescriptionDoctorName(prescription, lookups),
+});
 
 const getProviderScopeId = (currentUser) => Number(currentUser?.id);
 
@@ -87,9 +159,12 @@ const applyFilters = (prescriptions, searchQuery, statusFilter) => {
   return result.filter(
     (prescription) =>
       String(prescription.id).includes(q) ||
-      String(prescription.patient_id).includes(q) ||
-      String(prescription.doctor_id).includes(q) ||
-      prescription.status?.toLowerCase().includes(q)
+      String(getPrescriptionPatientId(prescription) || '').includes(q) ||
+      String(getPrescriptionDoctorId(prescription) || '').includes(q) ||
+      matchesSearch(getPrescriptionPatientName(prescription), q) ||
+      matchesSearch(getPrescriptionDoctorName(prescription), q) ||
+      matchesSearch(prescription.status, q) ||
+      matchesSearch(prescription.notes, q)
   );
 };
 
@@ -131,6 +206,7 @@ function* handleFetchPrescriptions(action) {
     const providerScopeId = getProviderScopeId(currentUser);
     const requestedPage = action.payload?.page ?? pagination.page;
     const force = Boolean(action.payload?.force);
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey = buildPrescriptionQueryKey(searchQuery, statusFilter, currentUser);
     const cachedPage = yield select(
       (state) => state.prescriptions.pageCache[queryKey]?.[requestedPage]
@@ -142,19 +218,22 @@ function* handleFetchPrescriptions(action) {
     }
 
     const params = {
-      page: isProvider ? 1 : requestedPage,
-      per_page: isProvider ? 500 : pagination.pageSize,
-      ...(searchQuery && { search: searchQuery }),
+      page: isProvider || useLocalSearch ? 1 : requestedPage,
+      per_page: isProvider || useLocalSearch ? 500 : pagination.pageSize,
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
       ...(isProvider && Number.isFinite(providerScopeId) && { doctor_id: providerScopeId }),
     };
 
     const envelope = yield call(fetchPrescriptionsEnvelope, params, isProvider);
-    const responseData = extractCollection(envelope);
+    const lookups = useLocalSearch ? yield call(fetchPrescriptionLookups) : {};
+    const responseData = extractCollection(envelope).map((item) =>
+      enrichPrescription(item, lookups)
+    );
     const scopedData = isProvider
       ? scopeProviderPrescriptions(responseData, currentUser)
       : responseData;
-    const paginatedPayload = isProvider
+    const paginatedPayload = isProvider || useLocalSearch
       ? buildFallbackPage(
           applyFilters(scopedData, searchQuery, statusFilter),
           requestedPage,
@@ -195,6 +274,7 @@ function* handlePrefetchPrescriptions(action) {
     const isProvider = currentRole === 'provider';
     const providerScopeId = getProviderScopeId(currentUser);
     const requestedPage = action.payload?.page;
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey =
       action.payload?.queryKey ??
       buildPrescriptionQueryKey(searchQuery, statusFilter, currentUser);
@@ -213,19 +293,22 @@ function* handlePrefetchPrescriptions(action) {
     }
 
     const params = {
-      page: isProvider ? 1 : requestedPage,
-      per_page: isProvider ? 500 : pagination.pageSize,
-      ...(searchQuery && { search: searchQuery }),
+      page: isProvider || useLocalSearch ? 1 : requestedPage,
+      per_page: isProvider || useLocalSearch ? 500 : pagination.pageSize,
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
       ...(isProvider && Number.isFinite(providerScopeId) && { doctor_id: providerScopeId }),
     };
 
     const envelope = yield call(fetchPrescriptionsEnvelope, params, isProvider);
-    const responseData = extractCollection(envelope);
+    const lookups = useLocalSearch ? yield call(fetchPrescriptionLookups) : {};
+    const responseData = extractCollection(envelope).map((item) =>
+      enrichPrescription(item, lookups)
+    );
     const scopedData = isProvider
       ? scopeProviderPrescriptions(responseData, currentUser)
       : responseData;
-    const paginatedPayload = isProvider
+    const paginatedPayload = isProvider || useLocalSearch
       ? buildFallbackPage(
           applyFilters(scopedData, searchQuery, statusFilter),
           requestedPage,
@@ -263,7 +346,8 @@ function* handlePrefetchPrescriptions(action) {
 function* handleFetchPrescriptionById(action) {
   try {
     const envelope = yield call(fetchPrescriptionByIdAPI, action.payload);
-    yield put(fetchPrescriptionByIdSuccess(envelope.data));
+    const lookups = yield call(fetchPrescriptionLookups);
+    yield put(fetchPrescriptionByIdSuccess(enrichPrescription(envelope.data, lookups)));
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to fetch prescription.';
     yield put(fetchPrescriptionByIdFailure(message));

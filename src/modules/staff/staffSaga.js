@@ -28,6 +28,7 @@ import {
   deleteStaffSuccess,
   deleteStaffFailure,
 } from './staffSlice';
+import { getEntityDisplayName, matchesSearch, normalizeNamedEntity } from '../../utils/entityDisplay';
 
 const applyFilters = (staff, searchQuery, roleFilter, statusFilter) => {
   const q = searchQuery.toLowerCase().trim();
@@ -35,9 +36,9 @@ const applyFilters = (staff, searchQuery, roleFilter, statusFilter) => {
   return staff.filter((member) => {
     const matchSearch =
       !q ||
-      member.name?.toLowerCase().includes(q) ||
-      member.email?.toLowerCase().includes(q) ||
-      member.role?.toLowerCase().includes(q);
+      matchesSearch(getEntityDisplayName(member), q) ||
+      matchesSearch(member.email, q) ||
+      matchesSearch(member.role, q);
     const matchRole = roleFilter === 'all' || member.role === roleFilter;
     const matchStatus = statusFilter === 'all' || member.status === statusFilter;
     return matchSearch && matchRole && matchStatus;
@@ -67,6 +68,7 @@ function* handleFetchStaff(action) {
     );
     const requestedPage = action.payload?.page ?? pagination.page;
     const force = Boolean(action.payload?.force);
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey = buildPaginationCacheKey({
       search: searchQuery,
       role: roleFilter,
@@ -82,16 +84,24 @@ function* handleFetchStaff(action) {
     }
 
     const params = {
-      page: requestedPage,
-      per_page: pagination.pageSize,
-      ...(searchQuery && { search: searchQuery }),
+      page: useLocalSearch ? 1 : requestedPage,
+      per_page: useLocalSearch ? 500 : pagination.pageSize,
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
       ...(roleFilter !== 'all' && { role: roleFilter }),
       ...(statusFilter !== 'all' && { status: statusFilter }),
     };
 
     const envelope = yield call(fetchAllStaffAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
-    const paginatedPayload = envelope?.pagination
+    const responseData = Array.isArray(envelope?.data)
+      ? envelope.data.map(normalizeNamedEntity)
+      : [];
+    const paginatedPayload = useLocalSearch
+      ? buildFallbackPage(
+          applyFilters(responseData, searchQuery, roleFilter, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
       ? {
           data: responseData,
           pagination: envelope.pagination,
@@ -122,6 +132,7 @@ function* handlePrefetchStaff(action) {
       (state) => state.staff
     );
     const requestedPage = action.payload?.page;
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey =
       action.payload?.queryKey ??
       buildPaginationCacheKey({
@@ -144,16 +155,24 @@ function* handlePrefetchStaff(action) {
     }
 
     const params = {
-      page: requestedPage,
-      per_page: pagination.pageSize,
-      ...(searchQuery && { search: searchQuery }),
+      page: useLocalSearch ? 1 : requestedPage,
+      per_page: useLocalSearch ? 500 : pagination.pageSize,
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
       ...(roleFilter !== 'all' && { role: roleFilter }),
       ...(statusFilter !== 'all' && { status: statusFilter }),
     };
 
     const envelope = yield call(fetchAllStaffAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
-    const paginatedPayload = envelope?.pagination
+    const responseData = Array.isArray(envelope?.data)
+      ? envelope.data.map(normalizeNamedEntity)
+      : [];
+    const paginatedPayload = useLocalSearch
+      ? buildFallbackPage(
+          applyFilters(responseData, searchQuery, roleFilter, statusFilter),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
       ? {
           data: responseData,
           pagination: envelope.pagination,
@@ -185,7 +204,7 @@ function* handlePrefetchStaff(action) {
 function* handleFetchStaffById(action) {
   try {
     const envelope = yield call(fetchStaffByIdAPI, action.payload);
-    yield put(fetchStaffByIdSuccess(envelope.data));
+    yield put(fetchStaffByIdSuccess(normalizeNamedEntity(envelope.data)));
   } catch (error) {
     const message = error.response?.data?.message || 'Failed to fetch staff member.';
     yield put(fetchStaffByIdFailure(message));

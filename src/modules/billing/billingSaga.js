@@ -5,7 +5,9 @@ import {
   fetchBillingSummaryAPI,
   fetchAllInvoicesAPI,
 } from './billingAPI';
+import { fetchAllPatientsAPI } from '../patients/patientAPI';
 import { buildPaginationCacheKey } from '../../utils/paginationCache';
+import { getEntityDisplayName, matchesSearch } from '../../utils/entityDisplay';
 import {
   fetchInvoicesRequest,
   fetchInvoicesSuccess,
@@ -25,6 +27,35 @@ import {
   markPaidFailure,
 } from './billingSlice';
 
+const buildPatientLookup = (records = []) =>
+  records.reduce((acc, patient) => {
+    const id = Number(patient?.id);
+    const name = getEntityDisplayName(patient);
+
+    if (Number.isFinite(id) && name) {
+      acc[id] = name;
+    }
+
+    return acc;
+  }, {});
+
+const fetchBillingLookups = async () => {
+  const patientsEnvelope = await fetchAllPatientsAPI({ per_page: 500 }).catch(() => ({ data: [] }));
+  const patientRecords = Array.isArray(patientsEnvelope?.data) ? patientsEnvelope.data : [];
+
+  return {
+    patients: buildPatientLookup(patientRecords),
+  };
+};
+
+const enrichInvoice = (invoice, lookups = {}) => ({
+  ...invoice,
+  patient_name:
+    invoice?.patient_name ||
+    lookups?.patients?.[Number(invoice?.patient_id)] ||
+    '',
+});
+
 const applyFilters = (invoices, statusFilter, searchQuery) => {
   let result = invoices;
 
@@ -40,8 +71,9 @@ const applyFilters = (invoices, statusFilter, searchQuery) => {
   return result.filter(
     (invoice) =>
       String(invoice.id).includes(q) ||
-      invoice.patient_name?.toLowerCase().includes(q) ||
-      String(invoice.prescription_id).includes(q)
+      matchesSearch(invoice.patient_name, q) ||
+      matchesSearch(invoice.patient_id, q) ||
+      matchesSearch(invoice.prescription_id, q)
   );
 };
 
@@ -68,6 +100,7 @@ function* handleFetchInvoices(action) {
     );
     const requestedPage = action.payload?.page ?? pagination.page;
     const force = Boolean(action.payload?.force);
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey = buildPaginationCacheKey({
       search: searchQuery,
       status: statusFilter,
@@ -82,15 +115,24 @@ function* handleFetchInvoices(action) {
     }
 
     const params = {
-      page: requestedPage,
-      per_page: pagination.pageSize,
+      page: useLocalSearch ? 1 : requestedPage,
+      per_page: useLocalSearch ? 500 : pagination.pageSize,
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
-      ...(searchQuery && { search: searchQuery }),
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
     };
 
     const envelope = yield call(fetchAllInvoicesAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
-    const paginatedPayload = envelope?.pagination
+    const lookups = useLocalSearch ? yield call(fetchBillingLookups) : {};
+    const responseData = Array.isArray(envelope?.data)
+      ? envelope.data.map((invoice) => enrichInvoice(invoice, lookups))
+      : [];
+    const paginatedPayload = useLocalSearch
+      ? buildFallbackPage(
+          applyFilters(responseData, statusFilter, searchQuery),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
       ? {
           data: responseData,
           pagination: envelope.pagination,
@@ -121,6 +163,7 @@ function* handlePrefetchInvoices(action) {
       (state) => state.billing
     );
     const requestedPage = action.payload?.page;
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey = action.payload?.queryKey ?? buildPaginationCacheKey({
       search: searchQuery,
       status: statusFilter,
@@ -140,15 +183,24 @@ function* handlePrefetchInvoices(action) {
     }
 
     const params = {
-      page: requestedPage,
-      per_page: pagination.pageSize,
+      page: useLocalSearch ? 1 : requestedPage,
+      per_page: useLocalSearch ? 500 : pagination.pageSize,
       ...(statusFilter !== 'ALL' && { status: statusFilter }),
-      ...(searchQuery && { search: searchQuery }),
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
     };
 
     const envelope = yield call(fetchAllInvoicesAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
-    const paginatedPayload = envelope?.pagination
+    const lookups = useLocalSearch ? yield call(fetchBillingLookups) : {};
+    const responseData = Array.isArray(envelope?.data)
+      ? envelope.data.map((invoice) => enrichInvoice(invoice, lookups))
+      : [];
+    const paginatedPayload = useLocalSearch
+      ? buildFallbackPage(
+          applyFilters(responseData, statusFilter, searchQuery),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
       ? {
           data: responseData,
           pagination: envelope.pagination,

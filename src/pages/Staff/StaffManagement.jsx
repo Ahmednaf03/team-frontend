@@ -4,6 +4,7 @@ import { Modal, Tooltip, Popconfirm, Tag } from 'antd';
 import { toast } from 'react-hot-toast';
 import useStaff from '../../modules/staff/hooks/useStaff';
 import useAuth from '../../modules/auth/hooks/useAuth';
+import { getEntityDisplayName } from '../../utils/entityDisplay';
 
 // ─── Animations ──────────────────────────────────────────────────────────────
 
@@ -618,6 +619,7 @@ const StaffManagement = () => {
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [formErrors, setFormErrors] = useState({});
   const debounceRef = useRef(null);
+  const getStaffName = useCallback((member) => getEntityDisplayName(member), []);
 
   // Fetch on mount
   useEffect(() => { fetchStaff(); }, [fetchStaff]);
@@ -648,7 +650,7 @@ const StaffManagement = () => {
   const openEdit = (e, member) => {
     e.stopPropagation();
     setFormData({
-      name:     member.name   || '',
+      name:     getStaffName(member),
       email:    member.email  || '',
       password: '',
       role:     member.role   || '',
@@ -680,9 +682,9 @@ const StaffManagement = () => {
   const handleToggleStatus = (e, member) => {
     e.stopPropagation();
     const newStatus = member.status === 'active' ? 'inactive' : 'active';
-    updateStaff(member.id, { name: member.name, status: newStatus }, () => {
+    updateStaff(member.id, { name: getStaffName(member), status: newStatus }, () => {
       toast.success(
-        `${member.name} marked as ${newStatus}.`,
+        `${getStaffName(member)} marked as ${newStatus}.`,
         { id: 'staff-toggle' }
       );
     });
@@ -824,10 +826,10 @@ const StaffManagement = () => {
                   <Td>
                     <AvatarCell>
                       <Avatar $role={member.role}>
-                        {initials(member.name)}
+                        {initials(getStaffName(member))}
                       </Avatar>
                       <div>
-                        <StaffName>{member.name}</StaffName>
+                        <StaffName>{getStaffName(member) || '—'}</StaffName>
                         <StaffId>#{member.id}</StaffId>
                       </div>
                     </AvatarCell>
@@ -1078,11 +1080,11 @@ const StaffManagement = () => {
         {selectedMember && (
           <div>
             <ViewAvatar $role={selectedMember.role}>
-              {initials(selectedMember.name)}
+              {initials(getStaffName(selectedMember))}
             </ViewAvatar>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <div style={{ fontSize: 18, fontWeight: 700 }}>
-                {selectedMember.name}
+                {getStaffName(selectedMember) || '—'}
               </div>
               <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>
                 Staff ID #{selectedMember.id}

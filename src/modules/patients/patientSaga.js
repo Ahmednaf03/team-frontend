@@ -25,21 +25,30 @@ import {
   deletePatientSuccess,
   deletePatientFailure,
 } from './patientSlice';
+import { getEntityDisplayName, matchesSearch, normalizeNamedEntity } from '../../utils/entityDisplay';
 
 const applySearch = (patients, searchQuery) => {
   const q = searchQuery.toLowerCase().trim();
+  const tokens = q.split(/\s+/).filter(Boolean);
 
   if (!q) {
     return patients;
   }
 
-  return patients.filter(
-    (patient) =>
-      patient.name?.toLowerCase().includes(q) ||
-      patient.phone?.toLowerCase().includes(q) ||
-      patient.diagnosis?.toLowerCase().includes(q) ||
-      patient.gender?.toLowerCase().includes(q)
-  );
+  return patients.filter((patient) => {
+    const searchableFields = [
+      getEntityDisplayName(patient),
+      patient.first_name,
+      patient.last_name,
+      patient.phone,
+      patient.email,
+      patient.id,
+    ];
+
+    return tokens.every((token) =>
+      searchableFields.some((value) => matchesSearch(value, token))
+    );
+  });
 };
 
 const buildFallbackPage = (items, page, pageSize) => {
@@ -64,6 +73,7 @@ function* handleFetchPatients(action) {
     const requestedPage = action.payload?.page ?? pagination.page;
     const prefetch = Boolean(action.payload?.prefetch);
     const force = Boolean(action.payload?.force);
+    const useLocalSearch = Boolean(searchQuery?.trim());
     const queryKey = buildPaginationCacheKey({ search: searchQuery });
     const cachedPage = yield select(
       (state) => state.patients.pageCache[queryKey]?.[requestedPage]
@@ -77,14 +87,22 @@ function* handleFetchPatients(action) {
     }
 
     const params = {
-      page: requestedPage,
-      per_page: pagination.pageSize,
-      ...(searchQuery && { search: searchQuery }),
+      page: useLocalSearch ? 1 : requestedPage,
+      per_page: useLocalSearch ? 500 : pagination.pageSize,
+      ...(!useLocalSearch && searchQuery && { search: searchQuery }),
     };
 
     const envelope = yield call(fetchAllPatientsAPI, params);
-    const responseData = Array.isArray(envelope?.data) ? envelope.data : [];
-    const paginatedPayload = envelope?.pagination
+    const responseData = Array.isArray(envelope?.data)
+      ? envelope.data.map(normalizeNamedEntity)
+      : [];
+    const paginatedPayload = useLocalSearch
+      ? buildFallbackPage(
+          applySearch(responseData, searchQuery),
+          requestedPage,
+          pagination.pageSize
+        )
+      : envelope?.pagination
       ? {
           data: responseData,
           pagination: envelope.pagination,
@@ -110,7 +128,7 @@ function* handleFetchPatients(action) {
 function* handleFetchPatientById(action) {
   try {
     const envelope = yield call(fetchPatientByIdAPI, action.payload);
-    const patient = envelope.data;
+    const patient = normalizeNamedEntity(envelope.data);
     yield put(fetchPatientByIdSuccess(patient));
   } catch (error) {
     const message =

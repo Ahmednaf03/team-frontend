@@ -4,6 +4,7 @@ import { Modal, Tooltip, Popconfirm, Tag, Badge } from 'antd';
 import { toast } from 'react-hot-toast';
 import usePatients from '../../modules/patients/hooks/usePatients';
 import useAuth from '../../modules/auth/hooks/useAuth';
+import { getEntityDisplayName } from '../../utils/entityDisplay';
 import {
   Building2,
   Plus,
@@ -648,6 +649,7 @@ const PatientList = () => {
   const [formErrors, setFormErrors] = useState({});
   const searchRef = useRef(null);
   const debounceRef = useRef(null);
+  const getPatientName = useCallback((patient) => getEntityDisplayName(patient), []);
 
   // Fetch on mount
   useEffect(() => {
@@ -680,7 +682,7 @@ const PatientList = () => {
   const openEdit = (e, patient) => {
     e.stopPropagation();
     setFormData({
-      name: patient.name || '',
+      name: getPatientName(patient),
       age: String(patient.age || ''),
       gender: patient.gender || '',
       phone: patient.phone || '',
@@ -827,10 +829,10 @@ const PatientList = () => {
                   <Td>
                     <AvatarCell>
                       <Avatar $gender={patient.gender}>
-                        {initials(patient.name)}
+                        {initials(getPatientName(patient))}
                       </Avatar>
                       <div>
-                        <PatientName>{patient.name}</PatientName>
+                        <PatientName>{getPatientName(patient) || '—'}</PatientName>
                         <PatientId>#{patient.id}</PatientId>
                       </div>
                     </AvatarCell>
@@ -1125,11 +1127,11 @@ const PatientList = () => {
         {selectedPatient && (
           <div>
             <ViewAvatar $gender={selectedPatient.gender}>
-              {initials(selectedPatient.name)}
+              {initials(getPatientName(selectedPatient))}
             </ViewAvatar>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
               <div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>
-                {selectedPatient.name}
+                {getPatientName(selectedPatient) || '—'}
               </div>
               <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 2 }}>
                 Patient ID #{selectedPatient.id}

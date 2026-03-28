@@ -15,7 +15,10 @@ import {
   unwrapAppointment,
 } from '../../utils/appointmentMapping';
 import { buildPaginationCacheKey } from '../../utils/paginationCache';
+import { getEntityDisplayName, matchesSearch } from '../../utils/entityDisplay';
 import axiosClient from '../../services/axiosClient';
+import { fetchAllPatientsAPI } from '../patients/patientAPI';
+import { fetchAllStaffAPI } from '../staff/staffAPI';
 
 import {
   fetchAppointmentsRequest,
@@ -76,6 +79,187 @@ const fetchAppointmentMessageSummariesAPI = async (appointmentIds = []) => {
   return response.data;
 };
 
+const buildFallbackPage = (items, page, pageSize) => {
+  const totalRecords = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+  const startIdx = (page - 1) * pageSize;
+
+  return {
+    data: items.slice(startIdx, startIdx + pageSize),
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalRecords,
+      perPage: pageSize,
+    },
+  };
+};
+
+const buildLookup = (records = []) =>
+  records.reduce((acc, record) => {
+    const id = Number(record?.id);
+    const name = getEntityDisplayName(record);
+
+    if (Number.isFinite(id) && name) {
+      acc[id] = name;
+    }
+
+    return acc;
+  }, {});
+
+const isDoctorRecord = (record) => {
+  const roleValue = `${record?.role || record?.staff_role || record?.designation || ''}`.toLowerCase();
+  return (
+    roleValue === 'provider' ||
+    roleValue.includes('doctor') ||
+    roleValue.includes('physician')
+  );
+};
+
+const fetchAppointmentLookups = async () => {
+  const [patientsEnvelope, staffEnvelope] = await Promise.all([
+    fetchAllPatientsAPI({ per_page: 500 }).catch(() => ({ data: [] })),
+    fetchAllStaffAPI({ per_page: 500 }).catch(() => ({ data: [] })),
+  ]);
+
+  const patientRecords = Array.isArray(patientsEnvelope?.data) ? patientsEnvelope.data : [];
+  const staffRecords = Array.isArray(staffEnvelope?.data) ? staffEnvelope.data : [];
+  const doctorRecords = staffRecords.filter(isDoctorRecord);
+
+  return {
+    patients: buildLookup(patientRecords),
+    doctors: buildLookup(doctorRecords),
+  };
+};
+
+const applyAppointmentSearch = (appointments, searchQuery) => {
+  const q = String(searchQuery || '').trim().toLowerCase();
+  const tokens = q.split(/\s+/).filter(Boolean);
+
+  if (!q) {
+    return appointments;
+  }
+
+  return appointments.filter((appointment) => {
+    const searchableFields = [
+      appointment?.patient_name,
+      appointment?.doctor_name,
+      appointment?.patient_id,
+      appointment?.doctor_id,
+      appointment?.id,
+    ];
+
+    return tokens.every((token) =>
+      searchableFields.some((value) => matchesSearch(value, token))
+    );
+  });
+};
+
+const applyAppointmentDateFilters = (appointments, dateFrom, dateTo) => {
+  if (!dateFrom && !dateTo) {
+    return appointments;
+  }
+
+  const start = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null;
+  const end = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null;
+
+  return appointments.filter((appointment) => {
+    if (!appointment?.scheduled_at) {
+      return false;
+    }
+
+    const scheduledAt = new Date(appointment.scheduled_at);
+
+    if (Number.isNaN(scheduledAt.getTime())) {
+      return false;
+    }
+
+    if (start && scheduledAt < start) {
+      return false;
+    }
+
+    if (end && scheduledAt > end) {
+      return false;
+    }
+
+    return true;
+  });
+};
+
+const applyAppointmentFilters = (appointments, filters) => {
+  let result = appointments;
+
+  if (filters.status) {
+    result = result.filter((appointment) => appointment?.status === filters.status);
+  }
+
+  result = applyAppointmentDateFilters(result, filters.dateFrom, filters.dateTo);
+
+  if (filters.search?.trim()) {
+    result = applyAppointmentSearch(result, filters.search);
+  }
+
+  return result;
+};
+
+const scopeAppointments = (appointments, isProvider, currentUser) =>
+  isProvider
+    ? appointments.filter(
+        (appointment) =>
+          Number(appointment.doctor_id) === Number(currentUser?.id)
+      )
+    : appointments;
+
+function* buildAppointmentPayload({
+  apiParams,
+  requestedPage,
+  pageSize,
+  isProvider,
+  currentUser,
+  useLocalFiltering,
+  filters,
+}) {
+  const responseData = yield call(fetchAppointmentsAPI, apiParams);
+  const lookups = useLocalFiltering
+    ? yield call(fetchAppointmentLookups)
+    : {};
+
+  const enrichedData = extractCollection(responseData).map((appointment) =>
+    enrichAppointment(appointment, lookups)
+  );
+
+  const appointmentIds = enrichedData
+    .map((appointment) => appointment.id)
+    .filter(Boolean);
+
+  const latestNotesResponse = appointmentIds.length
+    ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
+    : { data: [] };
+
+  const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
+
+  const hydratedData = enrichedData.map((appointment) =>
+    Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
+      ? { ...appointment, notes: latestNotesMap[appointment.id] }
+      : appointment
+  );
+
+  const scopedData = scopeAppointments(hydratedData, isProvider, currentUser);
+  const finalData = useLocalFiltering
+    ? applyAppointmentFilters(scopedData, filters)
+    : scopedData;
+
+  const paginatedPayload =
+    useLocalFiltering || !responseData.pagination
+      ? buildFallbackPage(finalData, requestedPage, pageSize)
+      : {
+          data: finalData,
+          pagination: responseData.pagination,
+        };
+
+  return paginatedPayload;
+}
+
 // ── Fetch all appointments ────────────────────────────────────────────────
 function* handleFetchAppointments(action) {
   try {
@@ -86,6 +270,9 @@ function* handleFetchAppointments(action) {
 
     const requestedPage = action.payload?.page ?? pagination.currentPage;
     const force = Boolean(action.payload?.force);
+    const useLocalFiltering = Boolean(
+      filters.search?.trim() || filters.dateFrom || filters.dateTo
+    );
 
     const queryKey = buildPaginationCacheKey(filters);
 
@@ -98,52 +285,33 @@ function* handleFetchAppointments(action) {
       return;
     }
 
-    const params = {
-      page: requestedPage,
-      per_page: pagination.perPage,
-      ...(filters.status && { status: filters.status }),
+    const apiParams = {
+      page: useLocalFiltering ? 1 : requestedPage,
+      per_page: useLocalFiltering ? 500 : pagination.perPage,
+      ...(!useLocalFiltering && filters.status && { status: filters.status }),
       ...((isProvider ? currentUser?.id : filters.doctorId) && {
         doctor_id: isProvider ? currentUser.id : filters.doctorId,
       }),
       ...(filters.patientId && { patient_id: filters.patientId }),
-      ...(filters.dateFrom && { date_from: filters.dateFrom }),
-      ...(filters.dateTo && { date_to: filters.dateTo }),
-      ...(filters.search && { search: filters.search }),
+      ...(!useLocalFiltering && filters.dateFrom && { date_from: filters.dateFrom }),
+      ...(!useLocalFiltering && filters.dateTo && { date_to: filters.dateTo }),
+      ...(!useLocalFiltering && filters.search && { search: filters.search }),
     };
 
-    const responseData = yield call(fetchAppointmentsAPI, params);
-
-    const enrichedData = extractCollection(responseData).map((appointment) =>
-      enrichAppointment(appointment)
-    );
-
-    const appointmentIds = enrichedData
-      .map((appointment) => appointment.id)
-      .filter(Boolean);
-
-    const latestNotesResponse = appointmentIds.length
-      ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
-      : { data: [] };
-
-    const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
-
-    const hydratedData = enrichedData.map((appointment) =>
-      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
-        ? { ...appointment, notes: latestNotesMap[appointment.id] }
-        : appointment
-    );
-
-    const scopedData = isProvider
-      ? hydratedData.filter(
-          (appointment) =>
-            Number(appointment.doctor_id) === Number(currentUser?.id)
-        )
-      : hydratedData;
+    const paginatedPayload = yield call(buildAppointmentPayload, {
+      apiParams,
+      requestedPage,
+      pageSize: pagination.perPage,
+      isProvider,
+      currentUser,
+      useLocalFiltering,
+      filters,
+    });
 
     yield put(
       fetchAppointmentsSuccess({
-        data: scopedData,
-        pagination: responseData.pagination ?? null,
+        data: paginatedPayload.data,
+        pagination: paginatedPayload.pagination,
         page: requestedPage,
         queryKey,
       })
@@ -166,6 +334,9 @@ function* handlePrefetchAppointments(action) {
 
     const requestedPage = action.payload?.page;
     const queryKey = action.payload?.queryKey ?? buildPaginationCacheKey(filters);
+    const useLocalFiltering = Boolean(
+      filters.search?.trim() || filters.dateFrom || filters.dateTo
+    );
 
     if (!requestedPage) {
       return;
@@ -180,52 +351,33 @@ function* handlePrefetchAppointments(action) {
       return;
     }
 
-    const params = {
-      page: requestedPage,
-      per_page: pagination.perPage,
-      ...(filters.status && { status: filters.status }),
+    const apiParams = {
+      page: useLocalFiltering ? 1 : requestedPage,
+      per_page: useLocalFiltering ? 500 : pagination.perPage,
+      ...(!useLocalFiltering && filters.status && { status: filters.status }),
       ...((isProvider ? currentUser?.id : filters.doctorId) && {
         doctor_id: isProvider ? currentUser.id : filters.doctorId,
       }),
       ...(filters.patientId && { patient_id: filters.patientId }),
-      ...(filters.dateFrom && { date_from: filters.dateFrom }),
-      ...(filters.dateTo && { date_to: filters.dateTo }),
-      ...(filters.search && { search: filters.search }),
+      ...(!useLocalFiltering && filters.dateFrom && { date_from: filters.dateFrom }),
+      ...(!useLocalFiltering && filters.dateTo && { date_to: filters.dateTo }),
+      ...(!useLocalFiltering && filters.search && { search: filters.search }),
     };
 
-    const responseData = yield call(fetchAppointmentsAPI, params);
-
-    const enrichedData = extractCollection(responseData).map((appointment) =>
-      enrichAppointment(appointment)
-    );
-
-    const appointmentIds = enrichedData
-      .map((appointment) => appointment.id)
-      .filter(Boolean);
-
-    const latestNotesResponse = appointmentIds.length
-      ? yield call(fetchAppointmentMessageSummariesAPI, appointmentIds)
-      : { data: [] };
-
-    const latestNotesMap = buildLatestNotesMap(latestNotesResponse);
-
-    const hydratedData = enrichedData.map((appointment) =>
-      Object.prototype.hasOwnProperty.call(latestNotesMap, appointment.id)
-        ? { ...appointment, notes: latestNotesMap[appointment.id] }
-        : appointment
-    );
-
-    const scopedData = isProvider
-      ? hydratedData.filter(
-          (appointment) =>
-            Number(appointment.doctor_id) === Number(currentUser?.id)
-        )
-      : hydratedData;
+    const paginatedPayload = yield call(buildAppointmentPayload, {
+      apiParams,
+      requestedPage,
+      pageSize: pagination.perPage,
+      isProvider,
+      currentUser,
+      useLocalFiltering,
+      filters,
+    });
 
     yield put(
       prefetchAppointmentsSuccess({
-        data: scopedData,
-        pagination: responseData.pagination ?? null,
+        data: paginatedPayload.data,
+        pagination: paginatedPayload.pagination,
         page: requestedPage,
         queryKey,
       })
