@@ -649,6 +649,7 @@ const InvoicePage = () => {
   });
   const [paymentMetadata, setPaymentMetadata] = useState(() => loadPaymentMetadata());
   const pendingPaymentRef = useRef(null);
+  const generateInFlightRef = useRef(false);
   const hospitalName = useMemo(() => getHospitalNameFromSubdomain(), []);
 
   useEffect(() => {
@@ -698,8 +699,15 @@ const InvoicePage = () => {
     dismissSuccess();
   }, [dismissSuccess, success]);
 
+  useEffect(() => {
+    if (!submitting) {
+      generateInFlightRef.current = false;
+    }
+  }, [submitting]);
+
   const handleGenerate = () => {
-    if (!prescriptionId.trim()) return;
+    if (!prescriptionId.trim() || submitting || generateInFlightRef.current) return;
+    generateInFlightRef.current = true;
     generateInvoice(prescriptionId.trim());
   };
 

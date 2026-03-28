@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import styled, { keyframes, css } from 'styled-components';
-import { Modal, Tooltip, Popconfirm, Tag, Badge } from 'antd';
+import { Modal, Tooltip, Popconfirm, Tag } from 'antd';
 import { toast } from 'react-hot-toast';
 import usePatients from '../../modules/patients/hooks/usePatients';
 import useAuth from '../../modules/auth/hooks/useAuth';

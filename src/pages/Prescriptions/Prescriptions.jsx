@@ -52,6 +52,29 @@ const getEntityDisplayName = (entity) => {
   );
 };
 
+const extractPrescriptionItems = (payload) => {
+  const source = payload?.data ?? payload ?? {};
+
+  const candidates = [
+    source?.items,
+    source?.prescription_items,
+    source?.medications,
+    source?.medicines,
+    source?.data?.items,
+    source?.data?.prescription_items,
+    source?.data?.medications,
+    source?.data?.medicines,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  return [];
+};
+
 // ── Animations ────────────────────────────────────────────────────────────────
 const fadeUp = keyframes`
   from { opacity: 0; transform: translateY(14px); }
@@ -633,6 +656,7 @@ const validateItem = (d) => {
 
 const EMPTY_CREATE = { patient_id: '', doctor_id: '', appointment_id: '', notes: '' };
 const EMPTY_ITEM   = { medicine_id: '', dosage: '', frequency: '', duration_days: '', quantity: '', instructions: '' };
+const canModifyPrescriptionItems = (status) => ['PENDING', 'VERIFIED'].includes(status);
 
 const FREQUENCY_OPTIONS = [
   'Once daily', 'Twice daily', 'Three times daily',
@@ -745,6 +769,7 @@ const canDispense = ['pharmacist'].includes(role);
   const [itemErrors, setItemErrors] = useState({});
 
   const debounceRef = useRef(null);
+  const actionCheckRef = useRef({ verify: null, dispense: null });
 
   const resolvePatientName = useCallback(
     (source) => {
@@ -840,6 +865,12 @@ const canDispense = ['pharmacist'].includes(role);
     }
   }, [error, dismissError]);
 
+  useEffect(() => {
+    if (!submitting) {
+      actionCheckRef.current = { verify: null, dispense: null };
+    }
+  }, [submitting]);
+
   // search debounce
   const handleSearch = useCallback((e) => {
     const val = e.target.value;
@@ -933,13 +964,23 @@ const canDispense = ['pharmacist'].includes(role);
   // ── Verify ────────────────────────────────────────────────────────────
   const handleVerify = async (id, e) => {
     e?.stopPropagation();
+    if (actionCheckRef.current.verify === id || submitting) {
+      return;
+    }
+
+    actionCheckRef.current.verify = id;
 
     try {
-      const detailEnvelope = await fetchPrescriptionByIdAPI(id);
-      const targetPrescription = detailEnvelope?.data;
+      const source =
+        currentPrescription && Number(currentPrescription.id) === Number(id)
+          ? currentPrescription
+          : await fetchPrescriptionByIdAPI(id);
 
-      if (!targetPrescription?.items?.length) {
+      const items = extractPrescriptionItems(source);
+
+      if (!items.length) {
         toast.error('No medications found.');
+        actionCheckRef.current.verify = null;
         return;
       }
 
@@ -948,13 +989,40 @@ const canDispense = ['pharmacist'].includes(role);
       toast.error(
         verifyCheckError?.response?.data?.message || 'Unable to validate prescription items.'
       );
+      actionCheckRef.current.verify = null;
     }
   };
 
   // ── Dispense ──────────────────────────────────────────────────────────
-  const handleDispense = (id, e) => {
+  const handleDispense = async (id, e) => {
     e?.stopPropagation();
-    dispense(id);
+    if (actionCheckRef.current.dispense === id || submitting) {
+      return;
+    }
+
+    actionCheckRef.current.dispense = id;
+
+    try {
+      const source =
+        currentPrescription && Number(currentPrescription.id) === Number(id)
+          ? currentPrescription
+          : await fetchPrescriptionByIdAPI(id);
+
+      const items = extractPrescriptionItems(source);
+
+      if (!items.length) {
+        toast.error('No medications found.');
+        actionCheckRef.current.dispense = null;
+        return;
+      }
+
+      dispense(id);
+    } catch (dispenseCheckError) {
+      toast.error(
+        dispenseCheckError?.response?.data?.message || 'Unable to validate prescription items.'
+      );
+      actionCheckRef.current.dispense = null;
+    }
   };
 
   const pStart = total > 0 ? (page - 1) * pageSize + 1 : 0;
@@ -1079,7 +1147,7 @@ const canDispense = ['pharmacist'].includes(role);
                       </Tooltip>
 
                       {/* Add items button — provider/admin only, for PENDING */}
-                      {canCreate && rx.status === 'PENDING' && (
+                      {canCreate && canModifyPrescriptionItems(rx.status) && (
                         <Tooltip title="Add medicines">
                           <ActionBtn
                             $variant="verify"
@@ -1416,7 +1484,7 @@ const canDispense = ['pharmacist'].includes(role);
           currentPrescription ? (
             <ModalFooterBtns>
               {/* Add more medicines — provider/admin, PENDING only */}
-              {canCreate && currentPrescription.status === 'PENDING' && (
+              {canCreate && canModifyPrescriptionItems(currentPrescription.status) && (
                 <PrimaryBtn
                   style={{ fontSize: 13, padding: '8px 16px' }}
                   onClick={() => {

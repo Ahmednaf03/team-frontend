@@ -1,4 +1,3 @@
-// src/app/rootReducer.js
 import { combineReducers } from '@reduxjs/toolkit';
 import authReducer from '../modules/auth/authSlice';
 import patientReducer from '../modules/patients/patientSlice';

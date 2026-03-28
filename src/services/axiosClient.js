@@ -9,9 +9,9 @@ const axiosClient = axios.create({
   withCredentials: true,
 });
 
-// ==========================================
+
 // 1. REQUEST INTERCEPTOR
-// ==========================================
+
 axiosClient.interceptors.request.use(async (config) => {
   // --- OFFLINE SYNC INTERCEPTION ---
   if (!navigator.onLine) {
@@ -57,10 +57,8 @@ axiosClient.interceptors.request.use(async (config) => {
   return Promise.reject(error);
 });
 
-// ==========================================
-// 2. RESPONSE INTERCEPTOR & QUEUE LOGIC
-// ==========================================
 
+// 2. RESPONSE INTERCEPTOR & QUEUE LOGIC
 // These variables act as the "traffic light" for multiple requests
 let isRefreshing = false;
 let failedQueue = [];

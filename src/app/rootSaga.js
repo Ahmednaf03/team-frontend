@@ -12,9 +12,9 @@ export default function* rootSaga() {
   yield all([
      
     authSaga(),
-     appointmentSaga(),
-     calendarSaga(),
-     chatSaga(),
+    appointmentSaga(),
+    calendarSaga(),
+    chatSaga(),
     patientSaga(),
     prescriptionSaga(),
     billingSaga(),
